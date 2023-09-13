@@ -3,7 +3,7 @@ import cv2
 #import cv2.typing does not work in 4.7
 import numpy as np
 import time
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 def get_thresh_mask(frame, #: cv2.typing.MatLike,  #cv2.typing.MatLike does not work in opencv < 4.8
                     lowerBound,
@@ -11,7 +11,6 @@ def get_thresh_mask(frame, #: cv2.typing.MatLike,  #cv2.typing.MatLike does not 
                     frame_convert = cv2.COLOR_BGR2HSV,
                 ):
     frame = cv2.cvtColor(frame, frame_convert)
-
     #Blur helps to remove nois in background
     frame = cv2.medianBlur(frame,5)
     mask = cv2.inRange(frame, lowerBound, upperBound)
@@ -46,8 +45,8 @@ def init_gst():
     cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1920, height=1080, framerate=5/1, format=YUY2 ! imxvideoconvert_pxp ! video/x-raw, format=BGR ! appsink',
                             cv2.CAP_GSTREAMER)
 
-    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=640, height=360, format=GRAY8 ! imxvideoconvert_pxp ! video/x-raw, width=800, height=600, format=BGRx ! fpsdisplaysink sync=false',
-                               cv2.CAP_GSTREAMER,5,(640,360),False)
+    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=BGR ! videoconvert ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
+                               cv2.CAP_GSTREAMER,5,(1920,1080),True)
 
     if not cap_gst.isOpened():
         logging.error('VideoCapture not opened')
@@ -63,8 +62,8 @@ def init_gst():
 
     return cap_gst, wrt_gst
 
-thresh_lowerBound=np.array([10,22,25]) #10
-thresh_upperBound=np.array([90,255,255]) #90
+thresh_lowerBound=np.array([10,50,50]) #10
+thresh_upperBound=np.array([95,255,255]) #90
 
 cap_gst, wrt_gst = init_gst()
 
@@ -77,8 +76,9 @@ while True:
     resized_frame = cv2.resize(cap_frame, (640, 360),interpolation=cv2.INTER_LINEAR)
     mask = get_thresh_mask(resized_frame,thresh_lowerBound,thresh_upperBound)
     resized_frame = get_masked_image(resized_frame, mask)
-    resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-    wrt_gst.write(resized_frame)
+    #resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
+    cap_frame[0:360, 0:640,:] = resized_frame[:,:,:]
+    wrt_gst.write(cap_frame)
     end_time = time.time()
     logging.debug("Time in ms =%f",(end_time-start_time)*10**3)
 
