@@ -83,6 +83,14 @@ try:
         mask = get_thresh_mask(resized_frame,thresh_lowerBound,thresh_upperBound)
         resized_frame = get_masked_image(resized_frame, mask)
         
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnt = max(contours, key=cv2.contourArea)
+        cv2.drawContours(resized_frame, [cnt], 0, (0,255,0),2)
+        rect = cv2.minAreaRect(cnt)
+        box = cv2.boxPoints(rect)
+        box = np.intp(box)
+        cv2.drawContours(resized_frame, [box], 0, (255,255,0),3)
+
         #Write Frame
         cap_frame[0:360, 0:640,:] = resized_frame[:,:,:]
         wrt_gst.write(cap_frame)
