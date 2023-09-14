@@ -3,6 +3,8 @@ import cv2
 #import cv2.typing does not work in 4.7
 import numpy as np
 import time
+from SettingsFile import xmlSettings
+
 logging.basicConfig(level=logging.INFO)
 
 def get_thresh_mask(frame, #: cv2.typing.MatLike,  #cv2.typing.MatLike does not work in opencv < 4.8
@@ -62,26 +64,35 @@ def init_gst():
 
     return cap_gst, wrt_gst
 
-thresh_lowerBound=np.array([10,50,50]) #10
-thresh_upperBound=np.array([95,255,255]) #90
+settings_xml = 'Settings.xml'
+Settings = xmlSettings(settings_xml)
 
-cap_gst, wrt_gst = init_gst()
+try:
+    cap_gst, wrt_gst = init_gst()
+    while True:
+        start_time = time.time()
+        Settings.parse(settings_xml)
+        thresh_lowerBound, thresh_upperBound = Settings.read_hsv_boundings()
+        ret, cap_frame = get_frame(cap_gst,5)
+        if not ret:
+            logging.error('stream broken')
+            break
 
-while True:
-    start_time = time.time()
-    ret, cap_frame = get_frame(cap_gst,5)
-    if not ret:
-        logging.error('stream broken')
-        break
-    resized_frame = cv2.resize(cap_frame, (640, 360),interpolation=cv2.INTER_LINEAR)
-    mask = get_thresh_mask(resized_frame,thresh_lowerBound,thresh_upperBound)
-    resized_frame = get_masked_image(resized_frame, mask)
-    #resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-    cap_frame[0:360, 0:640,:] = resized_frame[:,:,:]
-    wrt_gst.write(cap_frame)
-    end_time = time.time()
-    logging.debug("Time in ms =%f",(end_time-start_time)*10**3)
+        #Remove Background
+        resized_frame = cv2.resize(cap_frame, (640, 360),interpolation=cv2.INTER_LINEAR)
+        mask = get_thresh_mask(resized_frame,thresh_lowerBound,thresh_upperBound)
+        resized_frame = get_masked_image(resized_frame, mask)
+        
+        #Write Frame
+        cap_frame[0:360, 0:640,:] = resized_frame[:,:,:]
+        wrt_gst.write(cap_frame)
+        end_time = time.time()
+        logging.debug("Time in ms =%f",(end_time-start_time)*10**3)
 
-
-cap_gst.release()
-wrt_gst.release()
+except KeyboardInterrupt:
+    cap_gst.release()
+    wrt_gst.release()
+    Settings.write()
+else:
+    cap_gst.release()
+    wrt_gst.release()
