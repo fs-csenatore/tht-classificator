@@ -29,9 +29,8 @@ def get_masked_image(frame, #: cv2.typing.MatLike,
 #Sets Frame-Rate for outgoing stream
 def get_frame(cap_gst, fps :int):
     fps_stream = int(round(cap_gst.get(cv2.CAP_PROP_FPS )))
+    assert fps_stream % fps == 0, "Outgoing frame rate must be an integer divisor"
     frames2skip = int(fps_stream / fps)
-    logging.debug("frames2skip=%d",frames2skip)
-    logging.debug("fps_stream=%d", fps_stream)
     while True:
         frameId = int(round(cap_gst.get(cv2.CAP_PROP_POS_FRAMES)))
 
@@ -43,13 +42,16 @@ def get_frame(cap_gst, fps :int):
             logging.debug("drop frameId=%d",frameId)
             cap_gst.grab()
 
-def init_gst():
+def init_gst(Settings :xmlSettings):
     cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1920, height=1080, framerate=5/1, format=YUY2 ! imxvideoconvert_pxp ! video/x-raw, format=BGR ! appsink',
                             cv2.CAP_GSTREAMER)
 
     wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=BGR ! videoconvert ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
-                               cv2.CAP_GSTREAMER,5,(1920,1080),True)
-
+                               cv2.CAP_GSTREAMER,
+                               Settings.get_outgoing_framerate(),
+                               (1920,1080),
+                               True)
+    
     if not cap_gst.isOpened():
         logging.error('VideoCapture not opened')
         exit(0)
@@ -68,12 +70,12 @@ settings_xml = 'Settings.xml'
 Settings = xmlSettings(settings_xml)
 
 try:
-    cap_gst, wrt_gst = init_gst()
+    cap_gst, wrt_gst = init_gst(Settings)
     while True:
         start_time = time.time()
         Settings.parse(settings_xml)
         thresh_lowerBound, thresh_upperBound = Settings.read_hsv_boundings()
-        ret, cap_frame = get_frame(cap_gst,5)
+        ret, cap_frame = get_frame(cap_gst,Settings.get_outgoing_framerate())
         if not ret:
             logging.error('stream broken')
             break
