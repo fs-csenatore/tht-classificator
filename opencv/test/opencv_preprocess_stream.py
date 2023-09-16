@@ -46,11 +46,11 @@ def init_gst(Settings :xmlSettings):
     cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1920, height=1080, framerate=5/1, format=YUY2 ! imxvideoconvert_pxp ! video/x-raw, format=BGR ! appsink',
                             cv2.CAP_GSTREAMER)
 
-    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=BGR ! videoconvert ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
+    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=GRAY8 ! imxvideoconvert_pxp ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
                                cv2.CAP_GSTREAMER,
                                Settings.get_outgoing_framerate(),
                                (1920,1080),
-                               True)
+                               False)
     
     if not cap_gst.isOpened():
         logging.error('VideoCapture not opened')
@@ -87,6 +87,7 @@ try:
         
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours:
+            #Box for preview_image
             cnt = max(contours, key=cv2.contourArea)
             cv2.drawContours(resized_frame, [cnt], 0, (0,255,0),2)
             rect = cv2.minAreaRect(cnt)
@@ -97,6 +98,15 @@ try:
             box = np.intp(box)
             cv2.drawContours(resized_frame, [box], 0, (255,255,0),3)
 
+            #Mask for cap_frame
+            mask = np.zeros_like(mask)
+            cv2.drawContours(mask, [box],0, (255),cv2.FILLED)
+            mask = cv2.resize(mask,(1920, 1080), cv2.INTER_LINEAR)
+            imask = np.greater(mask, 0)
+            cap_frame = cv2.cvtColor(cap_frame,cv2.COLOR_BGR2GRAY)
+            masked_frame = np.zeros_like(cap_frame)
+            masked_frame[imask] = cap_frame[imask]
+
         if rect[1][0]<rect[1][1]:
             angle_rect = list(rect)
             angle_rect[2] = rect[2] - 90
@@ -106,8 +116,8 @@ try:
         resized_frame = cv2.warpAffine(resized_frame, rot_mat, resized_frame.shape[1::-1], flags=cv2.INTER_LINEAR)
 
         #Write Frame
-        cap_frame[0:360, 0:640,:] = resized_frame[:,:,:]
-        wrt_gst.write(cap_frame)
+        masked_frame[0:360, 0:640] = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
+        wrt_gst.write(masked_frame)
         end_time = time.time()
         logging.debug("Time in ms =%f",(end_time-start_time)*10**3)
 
