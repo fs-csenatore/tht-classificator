@@ -69,9 +69,12 @@ def init_gst(Settings :xmlSettings):
 settings_xml = 'Settings.xml'
 Settings = xmlSettings(settings_xml)
 
-try:
-    cap_gst, wrt_gst = init_gst(Settings)
-    while True:
+img_path="/home/weston/test"
+img_cnt :int =0
+
+cap_gst, wrt_gst = init_gst(Settings)
+while True:
+    try:
         start_time = time.time()
         Settings.parse(settings_xml)
         thresh_lowerBound, thresh_upperBound = Settings.read_hsv_boundings()
@@ -107,24 +110,29 @@ try:
             masked_frame = np.zeros_like(cap_frame)
             masked_frame[imask] = cap_frame[imask]
 
+        #rotate rect, so that x:y where x>y
         if rect[1][0]<rect[1][1]:
             angle_rect = list(rect)
             angle_rect[2] = rect[2] - 90
             rect = tuple(angle_rect)
 
-        rot_mat = cv2.getRotationMatrix2D(rect[0], rect[2],1)
-        resized_frame = cv2.warpAffine(resized_frame, rot_mat, resized_frame.shape[1::-1], flags=cv2.INTER_LINEAR)
+        rect_scaled_center = (rect[0][0]*3, rect[0][1]*3)
+        rect_scaled_size = (rect[1][0]*3, rect[1][1]*3)
 
+        #Rotate masked_frame, so that the board is orientated
+        rot_mat = cv2.getRotationMatrix2D(rect_scaled_center, rect[2],1)
+        masked_frame = cv2.warpAffine(masked_frame, rot_mat, masked_frame.shape[1::-1], flags=cv2.INTER_LINEAR)
+        pcb = masked_frame[int(rect_scaled_center[1]-(rect_scaled_size[1]/2)):int(rect_scaled_center[1]+(rect_scaled_size[1]/2)),
+                           int(rect_scaled_center[0]-(rect_scaled_size[0]/2)):int(rect_scaled_center[0]+(rect_scaled_size[0]/2))]
         #Write Frame
         masked_frame[0:360, 0:640] = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
         wrt_gst.write(masked_frame)
         end_time = time.time()
         logging.debug("Time in ms =%f",(end_time-start_time)*10**3)
 
-except KeyboardInterrupt:
-    cap_gst.release()
-    wrt_gst.release()
-    Settings.write()
-else:
-    cap_gst.release()
-    wrt_gst.release()
+    #TODO: Use another key to create a picture
+    except KeyboardInterrupt:
+        Settings.write(settings_xml)
+        file=str(img_path)+str(img_cnt)+".png"
+        cv2.imwrite(file,pcb)
+        img_cnt = img_cnt+1
