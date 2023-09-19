@@ -89,6 +89,7 @@ while True:
         resized_frame = get_masked_image(resized_frame, mask)
         
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cap_frame = cv2.cvtColor(cap_frame,cv2.COLOR_BGR2GRAY)
         if contours:
             #Box for preview_image
             cnt = max(contours, key=cv2.contourArea)
@@ -106,7 +107,6 @@ while True:
             cv2.drawContours(mask, [box],0, (255),cv2.FILLED)
             mask = cv2.resize(mask,(1920, 1080), cv2.INTER_LINEAR)
             imask = np.greater(mask, 0)
-            cap_frame = cv2.cvtColor(cap_frame,cv2.COLOR_BGR2GRAY)
             masked_frame = np.zeros_like(cap_frame)
             masked_frame[imask] = cap_frame[imask]
 
@@ -115,9 +115,11 @@ while True:
             angle_rect = list(rect)
             angle_rect[2] = rect[2] - 90
             rect = tuple(angle_rect)
+            rect_scaled_size = (rect[1][1]*3, rect[1][0]*3)
+        else:
+            rect_scaled_size = (rect[1][0]*3, rect[1][1]*3)
 
         rect_scaled_center = (rect[0][0]*3, rect[0][1]*3)
-        rect_scaled_size = (rect[1][0]*3, rect[1][1]*3)
 
         #Rotate masked_frame, so that the board is orientated
         rot_mat = cv2.getRotationMatrix2D(rect_scaled_center, rect[2],1)
