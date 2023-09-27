@@ -144,15 +144,26 @@ class FrameProccessing():
 
         return tuple(tmp_rect)
 
-    def __rotate_minAreaRect(self, rect):
+    """
+    Rotate bounding-box-img and minarearect, so that x:y where x>y
+    """
+    def __rotate_rect(self, rect, bounded_object):
         tmp_rect = list(rect)
-        #rotate rect, so that x:y where x>y
-        if rect[1][0]<rect[1][1]:
+        if rect[1][1]<rect[1][0] and rect[2] > 45:
+            bounded_object = cv2.rotate(bounded_object, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            tmp_rect[2] = rect[2] - 90
+
+        elif rect[1][0]<rect[1][1] and rect[2] < 45:
+            bounded_object = cv2.rotate(bounded_object, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        elif rect[1][0]<rect[1][1] and rect[2] > 45:
             tmp_rect[2] = rect[2] - 90
             tmp_rect[1] = (rect[1][1], rect[1][0])
-        else:
-            tmp_rect[1] = (rect[1][0], rect[1][1])
-        return tuple(tmp_rect)
+
+        if rect[1][0]<rect[1][1]:
+            tmp_rect[1] = (rect[1][1], rect[1][0])
+
+        return tuple(tmp_rect), bounded_object
 
     def __do_preprocess(self):
         #Get a Frame to work with
@@ -175,16 +186,33 @@ class FrameProccessing():
             x, y, w, h = cv2.boundingRect(scaled_box)
 
             #Get bounding Object
-            self.bounded_object = self.cap_frame[
-                y:y+h,
-                x:x+w,
-                :].copy()
-            scaled_rect = self.__rotate_minAreaRect(scaled_rect)
+            offset = 20
+            if max(0,y-offset) == 0 or \
+                min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
+                max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
+                #TODO: use this information in main
+                logging.debug("object is truncated")
 
-            #assume. that the center of bbox is same as in minAreaRect
-            object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
-            rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
-            self.object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
+            self.bounded_object = self.cap_frame[
+                max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
+                max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
+                :].copy()
+
+            if hasattr(self.bounded_object, 'shape') and self.bounded_object.shape[0] > 0 and self.bounded_object.shape[1] > 0:
+                scaled_rect, self.bounded_object = self.__rotate_rect(scaled_rect, self.bounded_object)
+
+                #assume. that the center of bbox is same as in minAreaRect
+                object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
+                rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
+                object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
+                self.object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
+                           int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
+
+            else:
+                if hasattr(self,'bounded_object'):
+                    del self.bounded_object
+                if hasattr(self,'object_img'):
+                    del self.object_img
 
             #TODO: Board cutout
 
