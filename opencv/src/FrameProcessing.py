@@ -1,3 +1,9 @@
+"""
+The purpose is that an object with certain color spectra
+(e.g. the green of a PCB) is detected in the image of the camera.
+The object should always be cut out and aligned.
+"""
+
 import logging
 import cv2
 #import cv2.typing does not work in 4.7
@@ -214,19 +220,23 @@ class FrameProccessing():
                 if hasattr(self,'object_img'):
                     del self.object_img
 
-            #TODO: Board cutout
+        else:
+            if hasattr(self,'bounded_object'):
+                del self.bounded_object
+            if hasattr(self,'object_img'):
+                del self.object_img
+            if hasattr(self, 'scaled_box'):
+                del self.scaled_box
 
-            #when debug is enabled
-            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-                self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
+        #when debug is enabled
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
+            if 'cnt' in locals():
                 cv2.drawContours(self.calibrate_frame, [cnt], 0, (0,255,0),2)
                 box = np.int0(cv2.boxPoints(rect))
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
                 cv2.rectangle(self.cap_frame, (x, y), (x + w, y + h), (255,0,255), 8)
-
-        else:
-            return
 
     def read_frame(self):
         self.__streamcap()
