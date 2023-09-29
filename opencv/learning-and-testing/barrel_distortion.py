@@ -33,6 +33,41 @@ def listen_keyboard_wrapper():
 
 thread = threading.Thread(target=listen_keyboard_wrapper)
 thread.start()
+
+def create_images():
+    i = 0
+    cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1920, height=1080, framerate=6/1, format=YUY2 ! imxvideoconvert_pxp ! video/x-raw, format=GRAY8 ! appsink',
+                            cv2.CAP_GSTREAMER)
+    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=GRAY8 ! imxvideoconvert_pxp ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
+                               cv2.CAP_GSTREAMER,
+                               6,
+                               (1440,1080),
+                               False)
+
+    if not cap_gst.isOpened():
+        print('VideoCapture not opened')
+        exit(0)
+    else:
+        print('VideoCapture is open')
+
+    if not wrt_gst.isOpened():
+        print('VideoWriter not opened')
+        exit(0)
+    else:
+        print('VideoWriter is open')
+
+    while i<=25:
+        frame = cap_gst.read()
+        frame = frame[:,frame.shape[1]*0.125:frame.shape[1]*0.875]
+        wrt_gst.write(frame)
+        print('press key to screenshot')
+        if key_pressed.f5:
+            key_pressed.f5 = False
+            cv2.imwrite('chess'+ str(i)+'.png',frame)
+
+
+#Uncommend when not used
+create_images()
  
 # Defining the dimensions of checkerboard
 CHECKERBOARD = (7,10)
@@ -48,7 +83,7 @@ imgpoints = []
 objp = np.zeros((1, CHECKERBOARD[0] * CHECKERBOARD[1], 3), np.float32)
 objp[0,:,:2] = np.mgrid[0:CHECKERBOARD[0], 0:CHECKERBOARD[1]].T.reshape(-1, 2)
 prev_img_shape = None
- 
+
 # Extracting path of individual image stored in a given directory
 images = glob.glob('*.png')
 for fname in images:
