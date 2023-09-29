@@ -29,6 +29,7 @@ class xmlSettings(xmlET.ElementTree):
         xmlET.SubElement(StreamCap, "Frame-Width").text ="1920"
         xmlET.SubElement(StreamCap, "Frame-Height").text = "1080"
         xmlET.SubElement(StreamCap, "Frame-Format").text = "YUY2"
+        xmlET.SubElement(StreamCap, 'StreamCap/rotation').text = '2'
 
         StreamWrite = xmlET.SubElement(self.getroot(), "StreamWrite")
         xmlET.SubElement(StreamWrite, "framerate").text = "5"
@@ -71,13 +72,17 @@ class xmlSettings(xmlET.ElementTree):
     def __get_streamcap_format(self):
         return self.findtext('StreamCap/Frame-Format')
 
+    def __get_streamcap_rotation(self):
+        return self.findtext('StreamCap/rotation')
+
     def get_streamcap_gstreamer_string(self):
         string = "v4l2src ! video/x-raw, "
         string = string + "width=" + str(self.__get_streamcap_width()) + ", "
         string = string + "height=" + str(self.__get_streamcap_height()) + ", "
         string = string + "format=" + self.__get_streamcap_format() + ", "
         string = string + "framerate=" + str(self.get_streamcap_framerate()) + "/1 "
-        string = string + "! queue ! imxvideoconvert_pxp ! video/x-raw, format=BGR ! queue ! appsink"
+        string = string + "! queue ! imxvideoconvert_pxp rotation=" + self.__get_streamcap_rotation() + " "
+        string = string + "! video/x-raw, format=BGR ! queue ! appsink"
         return string
 
     def get_streamwrite_gstreamer_string(self):
