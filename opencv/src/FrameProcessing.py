@@ -9,12 +9,15 @@ import cv2
 #import cv2.typing does not work in 4.7
 import numpy as np
 from SettingsFile import xmlSettings
+import pickle
 
 class FrameProccessing():
     def __init__(self, Settings: xmlSettings):
         self.Settings = Settings
         self.__check_Settings()
         self.__init_gst()
+        if self.__get_distortion_data():
+            self.__dist_data = self.__get_distortion_data()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()
         self.wrt_frame = np.uint8(np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3)))
 
@@ -83,6 +86,16 @@ class FrameProccessing():
         if not self.__get_frame():
             logging.error('stream is broken')
             assert False, "can't get new frame. Stream is broken"
+
+        #Due to distortion, and performance issues the image is limited to the center area.
+        # Therefore, the image is cropped to 4:3 format (25% less data).
+        self.cap_frame = self.cap_frame[self.cap_frame.shape[0]*0.125:self.cap_frame.shape[0]*0.875,:,:]
+
+        #undistort Image
+        if hasattr(self, 'dist_data'):
+            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[1], self.__dist_data[2], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
+            self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[1], self.__dist_data[2], None, newcameramtx)
+
 
     """
     get_thresh_mask
@@ -171,6 +184,13 @@ class FrameProccessing():
 
         return tuple(tmp_rect), bounded_object
 
+    #returnvalue is a tuple (mtx, dist, rvecs, tvecs)
+    def __get_distortion_data(self):
+        with open(self.Settings.get_distortion_file(), 'rb') as file:
+            data = pickle.load(file)
+
+        return data
+
     def __do_preprocess(self):
         #Get a Frame to work with
         self.working_frame = self.__create_working_frame()
@@ -193,17 +213,21 @@ class FrameProccessing():
 
             #Get bounding Object
             offset = 20
+
+            #is the board completly in frame
             if max(0,y-offset) == 0 or \
                 min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
                 max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
                 #TODO: use this information in main
                 logging.debug("object is truncated")
 
+            #get minimal image from board
             self.bounded_object = self.cap_frame[
                 max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
                 max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
                 :].copy()
 
+            #Rotate board
             if hasattr(self.bounded_object, 'shape') and self.bounded_object.shape[0] > 0 and self.bounded_object.shape[1] > 0:
                 scaled_rect, self.bounded_object = self.__rotate_rect(scaled_rect, self.bounded_object)
 

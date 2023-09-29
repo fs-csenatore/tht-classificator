@@ -69,14 +69,16 @@ def main():
     while True:
         img_processing.update()
 
-        #Show Captured Frame
-        img_processing.wrt_frame = img_processing.cap_frame
-
         #Draw Rectangle around object
         if hasattr(img_processing, 'scaled_box'):
             x, y, w, h = cv2.boundingRect(img_processing.scaled_box)
-            cv2.drawContours(img_processing.wrt_frame, [img_processing.scaled_box], 0, (255,255,0),2)
-            cv2.rectangle(img_processing.wrt_frame, (x, y), (x + w, y + h), (0,0,255), 4)
+            cv2.drawContours(img_processing.cap_frame, [img_processing.scaled_box], 0, (255,255,0),2)
+            cv2.rectangle(img_processing.cap_frame, (x, y), (x + w, y + h), (0,0,255), 4)
+
+        #Show Captured Frame
+        img_processing.wrt_frame[:,
+            img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1],
+            :] = img_processing.cap_frame
 
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -93,10 +95,11 @@ def main():
             if hasattr(img_processing, 'object_img'):
                 try:
                     shape2 = img_processing.object_img.shape
-                    img_processing.wrt_frame[0:shape2[0], 1920-shape2[1]:, :] = img_processing.object_img[:,:,:]
+                    img_processing.wrt_frame[0:shape2[0], img_processing.wrt_frame.shape[1]-shape2[1]:, :] = img_processing.object_img[:,:,:]
                 except:
                     logging.error("Could not display object_img")
                 if key_pressed.f5:
+                    #TODO: Automated dataset-creation
                     cv2.imwrite("test.png", img_processing.object_img)
                     print('saved image as test.png')
                     key_pressed.f5 = False

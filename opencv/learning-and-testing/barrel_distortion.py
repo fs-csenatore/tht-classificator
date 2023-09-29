@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import os
 import threading
 import glob
 from sshkeyboard import listen_keyboard
@@ -104,4 +103,4 @@ print("tvecs : \n")
 print(tvecs)
 
 with open('distortion.pkl', 'wb') as file:
-    pickle.dump((ret, mtx, dist, rvecs, tvecs), file)
+    pickle.dump((mtx, dist, rvecs, tvecs), file)

@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as xmlET
-from os.path import isfile
+from os.path import isfile, expanduser
 import logging
 
 class xmlSettings(xmlET.ElementTree):
@@ -29,7 +29,8 @@ class xmlSettings(xmlET.ElementTree):
         xmlET.SubElement(StreamCap, "Frame-Width").text ="1920"
         xmlET.SubElement(StreamCap, "Frame-Height").text = "1080"
         xmlET.SubElement(StreamCap, "Frame-Format").text = "YUY2"
-        xmlET.SubElement(StreamCap, 'StreamCap/rotation').text = '2'
+        xmlET.SubElement(StreamCap, 'rotation').text = '2'
+        xmlET.SubElement(StreamCap, 'dist-file').text = expanduser("~")+ '/.tht-classificator/distortion.pkl'
 
         StreamWrite = xmlET.SubElement(self.getroot(), "StreamWrite")
         xmlET.SubElement(StreamWrite, "framerate").text = "5"
@@ -106,3 +107,6 @@ class xmlSettings(xmlET.ElementTree):
             return False
         else:
             return True
+
+    def get_distortion_file(self):
+        return self.findtext('StreamCap/dist-file')
