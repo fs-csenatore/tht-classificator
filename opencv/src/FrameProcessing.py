@@ -98,7 +98,7 @@ class FrameProccessing():
     ):
         frame = cv2.cvtColor(frame, frame_convert)
         #Blur helps to remove nois in background
-        frame = cv2.medianBlur(frame,5)
+        frame = cv2.medianBlur(frame,17)
         mask = cv2.inRange(frame, lowerBound, upperBound)
         return mask
 
