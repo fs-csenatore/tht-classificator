@@ -26,9 +26,18 @@ def press(key):
     elif key=='f7':
         key_pressed.f7 = True
 
+def release(key):
+    if key=='f5':
+        key_pressed.f5 = False
+    elif key=='f6':
+        key_pressed.f6 = False
+    elif key=='f7':
+        key_pressed.f7 = False
+
 def listen_keyboard_wrapper():
     listen_keyboard(
         on_press=press,
+        on_release=release,
         delay_second_char=2,
         delay_other_chars=0.1,
     )
@@ -42,9 +51,15 @@ def main():
     if not os.path.exists(working_path):
         os.makedirs(working_path)
 
+    dataset_path = working_path + '/data_set'
+    if not os.path.exists(dataset_path):
+        os.makedirs(dataset_path)
+
+    imgcnt=0
+
     #parse Programm arguments
     parser = argparse.ArgumentParser(description='THT-Classificator: Erkenne und bewerte THT-Steckverbinder')
-    parser.add_argument('-b', '--board', type=str, help='Which board is evaluated?', default='armstoneA9',choices=['armstoneA9'])
+    parser.add_argument('-b', '--board', type=str, help='Which board is evaluated?', default='MED3_rev1.00',choices=['MED3_rev1.00'])
     parser.add_argument('-s', '--settings', type=str, help='Path to Settings-File', default=working_path + '/Settings.xml')
     parser.add_argument('-d', '--debug', action='store_true', help='print debugging messages')
     args = parser.parse_args()
@@ -77,7 +92,7 @@ def main():
 
         #Show Captured Frame
         img_processing.wrt_frame[:,
-            img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1],
+            img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1]:,
             :] = img_processing.cap_frame
 
         #when debug is enabled
@@ -100,7 +115,8 @@ def main():
                     logging.error("Could not display object_img")
                 if key_pressed.f5:
                     #TODO: Automated dataset-creation
-                    cv2.imwrite("test.png", img_processing.object_img)
+                    imgcnt = imgcnt + 1
+                    cv2.imwrite(args.board + 'rot' + str(imgcnt) + '.png', img_processing.object_img)
                     print('saved image as test.png')
                     key_pressed.f5 = False
 
