@@ -16,7 +16,7 @@ class FrameProccessing():
         self.Settings = Settings
         self.__check_Settings()
         self.__init_gst()
-        if self.__get_distortion_data():
+        if self.Settings.get_distortion_file() != None:
             self.__dist_data = self.__get_distortion_data()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()
         self.wrt_frame = np.uint8(np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3)))
@@ -54,9 +54,11 @@ class FrameProccessing():
     #Sets Frame-Rate for outgoing stream
     def __get_frame(self):
         fps = self.Settings.get_streamwrite_framerate()
+        #This is not the real FPS.
+        #It is the fixed value comming from v4l2src
         fps_stream = int(round(self.__cap_gst.get(cv2.CAP_PROP_FPS)))
-        assert fps_stream % fps == 0, "Outgoing frame rate must be an integer divisor"
-        frames2skip = int(fps_stream / fps)
+        #assert fps_stream % fps == 0, "Outgoing frame rate must be an integer divisor"
+        frames2skip = round(fps_stream / fps)
         while True:
             frameId = int(round(self.__cap_gst.get(cv2.CAP_PROP_POS_FRAMES)))
 
@@ -89,12 +91,12 @@ class FrameProccessing():
 
         #Due to distortion, and performance issues the image is limited to the center area.
         # Therefore, the image is cropped to 4:3 format (25% less data).
-        self.cap_frame = self.cap_frame[self.cap_frame.shape[0]*0.125:self.cap_frame.shape[0]*0.875,:,:]
+        self.cap_frame = self.cap_frame[:,int(self.cap_frame.shape[1]*0.125):int(self.cap_frame.shape[1]*0.875),:]
 
         #undistort Image
-        if hasattr(self, 'dist_data'):
-            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[1], self.__dist_data[2], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
-            self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[1], self.__dist_data[2], None, newcameramtx)
+        if hasattr(self, '__dist_data') or True:
+            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[0], self.__dist_data[1], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
+            self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[0], self.__dist_data[1], None, newcameramtx)
 
 
     """
@@ -111,7 +113,7 @@ class FrameProccessing():
     ):
         frame = cv2.cvtColor(frame, frame_convert)
         #Blur helps to remove nois in background
-        frame = cv2.medianBlur(frame,17)
+        frame = cv2.medianBlur(frame,7)
         mask = cv2.inRange(frame, lowerBound, upperBound)
         return mask
 
@@ -137,29 +139,25 @@ class FrameProccessing():
     def __get_minAreaRect(self, cnt):
         rect = cv2.minAreaRect(cnt)
         resized_rect = list(rect)
-        resized_rect[1] =  (rect[1][0] * 1.1, rect[1][1] * 1.1)
+        resized_rect[1] =  (int(rect[1][0] * 1.2), int(rect[1][1] * 1.2))
         return tuple(resized_rect)
 
     def __get_working_framesize(self):
         working_frame_res = list(
             self.Settings.get_streamcap_resolution())
 
-        if working_frame_res[0] == 1920:
-            working_frame_res[0] = int(working_frame_res[0]/3)
-            working_frame_res[1] = int(working_frame_res[1]/3)
-        else:
-            working_frame_res[0] = int(working_frame_res[0]/2)
-            working_frame_res[1] = int(working_frame_res[1]/2)
+        working_frame_res[0] = int(working_frame_res[0]*0.75/3)
+        working_frame_res[1] = int(working_frame_res[1]/3)
         return tuple(working_frame_res)
 
     def __scale_minAreaRect(self, rect):
         tmp_rect = list(rect)
-        if self.Settings.get_streamcap_resolution()[0] == 1920:
+        working_frame_res = self.Settings.get_streamcap_resolution()
+        if working_frame_res[0] == 1920 or \
+            working_frame_res[0] == 1280:
             tmp_rect[1] = (rect[1][0]*3, rect[1][1]*3)
             tmp_rect[0] = (rect[0][0]*3, rect[0][1]*3)
-        else:
-            tmp_rect[1] = (rect[1][0]*2, rect[1][1]*2)
-            tmp_rect[0] = (rect[0][0]*2, rect[0][1]*2)
+
 
         return tuple(tmp_rect)
 
@@ -200,6 +198,20 @@ class FrameProccessing():
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                                 cv2.CHAIN_APPROX_SIMPLE)
 
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
+
+        if hasattr(self,'bounded_object'):
+            del self.bounded_object
+        if hasattr(self,'object_img'):
+            del self.object_img
+        if hasattr(self, 'scaled_box'):
+            del self.scaled_box
+        if hasattr(self,'bounded_object'):
+            del self.bounded_object
+        if hasattr(self,'object_img'):
+            del self.object_img
+
         #TODO: Support more then one Board
         if contours:
             #create Boxing
@@ -212,7 +224,7 @@ class FrameProccessing():
             x, y, w, h = cv2.boundingRect(scaled_box)
 
             #Get bounding Object
-            offset = 20
+            offset = 60
 
             #is the board completly in frame
             if max(0,y-offset) == 0 or \
@@ -220,6 +232,7 @@ class FrameProccessing():
                 max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
                 #TODO: use this information in main
                 logging.debug("object is truncated")
+                return
 
             #get minimal image from board
             self.bounded_object = self.cap_frame[
@@ -238,29 +251,14 @@ class FrameProccessing():
                 self.object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
                            int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
 
-            else:
-                if hasattr(self,'bounded_object'):
-                    del self.bounded_object
-                if hasattr(self,'object_img'):
-                    del self.object_img
-
-        else:
-            if hasattr(self,'bounded_object'):
-                del self.bounded_object
-            if hasattr(self,'object_img'):
-                del self.object_img
-            if hasattr(self, 'scaled_box'):
-                del self.scaled_box
-
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
             if 'cnt' in locals():
                 cv2.drawContours(self.calibrate_frame, [cnt], 0, (0,255,0),2)
                 box = np.int0(cv2.boxPoints(rect))
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
-                cv2.rectangle(self.cap_frame, (x, y), (x + w, y + h), (255,0,255), 8)
+                #cv2.rectangle(self.cap_frame, (x, y), (x + w, y + h), (255,0,255), 8)
 
     def read_frame(self):
         self.__streamcap()

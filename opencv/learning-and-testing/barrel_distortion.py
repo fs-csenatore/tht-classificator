@@ -36,12 +36,12 @@ thread.start()
 
 def create_images():
     i = 0
-    cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1920, height=1080, framerate=6/1, format=YUY2 ! imxvideoconvert_pxp ! video/x-raw, format=GRAY8 ! appsink',
+    cap_gst = cv2.VideoCapture('v4l2src ! video/x-raw, width=1280, height=720, framerate=9/1, format=YUY2 ! imxvideoconvert_pxp rotation=2 ! video/x-raw, format=GRAY8 ! appsink',
                             cv2.CAP_GSTREAMER)
-    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1920, height=1080, format=GRAY8 ! imxvideoconvert_pxp ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
+    wrt_gst = cv2.VideoWriter('appsrc ! video/x-raw, width=1280, height=720, format=GRAY8 ! imxvideoconvert_pxp ! video/x-raw, format=BGRx ! fpsdisplaysink sync=false',
                                cv2.CAP_GSTREAMER,
-                               6,
-                               (1440,1080),
+                               5,
+                               (1280,720),
                                False)
 
     if not cap_gst.isOpened():
@@ -56,18 +56,27 @@ def create_images():
     else:
         print('VideoWriter is open')
 
+    cap_gst.grab()
+    cap_gst.grab()
+
     while i<=25:
-        frame = cap_gst.read()
-        frame = frame[:,frame.shape[1]*0.125:frame.shape[1]*0.875]
-        wrt_gst.write(frame)
+        ret, frame = cap_gst.read()
+        wrt_frame = np.zeros_like(frame)
+        frame = frame[:,int(frame.shape[1]*0.125):int(frame.shape[1]*0.875)]
+        print(frame.shape)
+        wrt_frame[:, int(wrt_frame.shape[1]*0.125):int(wrt_frame.shape[1]*0.875)] = frame
+        wrt_gst.write(wrt_frame)
         print('press key to screenshot')
         if key_pressed.f5:
             key_pressed.f5 = False
             cv2.imwrite('chess'+ str(i)+'.png',frame)
+            i=i+1
+
+    exit(0)
 
 
 #Uncommend when not used
-create_images()
+#create_images()
  
 # Defining the dimensions of checkerboard
 CHECKERBOARD = (7,10)
