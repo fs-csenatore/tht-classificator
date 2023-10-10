@@ -17,7 +17,7 @@ class FrameProccessing():
         self.__check_Settings()
         self.__init_gst()
         if self.Settings.get_distortion_file() != None:
-            self.__dist_data = self.__get_distortion_data()
+            self.dist_data = self.__get_distortion_data()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()
         self.wrt_frame = np.uint8(np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3)))
 
@@ -94,9 +94,9 @@ class FrameProccessing():
         self.cap_frame = self.cap_frame[:,int(self.cap_frame.shape[1]*0.125):int(self.cap_frame.shape[1]*0.875),:]
 
         #undistort Image
-        if hasattr(self, '__dist_data') or True:
-            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[0], self.__dist_data[1], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
-            self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[0], self.__dist_data[1], None, newcameramtx)
+        #if hasattr(self, 'dist_data'):
+        #    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[0], self.__dist_data[1], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
+        #    self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[0], self.__dist_data[1], None, newcameramtx)
 
 
     """
@@ -137,11 +137,20 @@ class FrameProccessing():
 
     # like cv2.minAreaRect(cnt) but it includes a litle offset
     def __get_minAreaRect(self, cnt):
+
+        #Rect is a little oversized to get full PCB-border
+        scale_factor = 1.1
+
         rect = cv2.minAreaRect(cnt)
         resized_rect = list(rect)
-        resized_rect[1] =  (int(rect[1][0] * 1.2), int(rect[1][1] * 1.2))
+        resized_rect[1] =  (int(rect[1][0] * scale_factor),
+                             int(rect[1][1] * scale_factor))
         return tuple(resized_rect)
 
+    '''
+    Get a framesize to work with.
+    it scalse the captured frame down with a ratio of 1/3 per axis
+    '''
     def __get_working_framesize(self):
         working_frame_res = list(
             self.Settings.get_streamcap_resolution())
@@ -150,6 +159,9 @@ class FrameProccessing():
         working_frame_res[1] = int(working_frame_res[1]/3)
         return tuple(working_frame_res)
 
+    '''
+    Scale minareaRect from Working frame size to capture frame size
+    '''
     def __scale_minAreaRect(self, rect):
         tmp_rect = list(rect)
         working_frame_res = self.Settings.get_streamcap_resolution()
@@ -198,9 +210,6 @@ class FrameProccessing():
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                                 cv2.CHAIN_APPROX_SIMPLE)
 
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
-
         if hasattr(self,'bounded_object'):
             del self.bounded_object
         if hasattr(self,'object_img'):
@@ -224,17 +233,16 @@ class FrameProccessing():
             x, y, w, h = cv2.boundingRect(scaled_box)
 
             #Get bounding Object
-            offset = 60
+            offset = 10
 
             #is the board completly in frame
             if max(0,y-offset) == 0 or \
                 min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
                 max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
-                #TODO: use this information in main
                 logging.debug("object is truncated")
                 return
 
-            #get minimal image from board
+            #get board within bounding box
             self.bounded_object = self.cap_frame[
                 max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
                 max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
@@ -248,17 +256,24 @@ class FrameProccessing():
                 object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
                 rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
                 object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
-                self.object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
+                object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
                            int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
+
+                if object_img.shape[0] > 5 and object_img.shape[1] > 5:
+                    #Resize object image to a 320x320 image
+                    max_size = max(object_img.shape[0], object_img.shape[1])
+                    self.object_img = np.zeros((max_size, max_size, 3))
+                    self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
+                    self.object_img = cv2.resize(self.object_img,(320,320), interpolation=cv2.INTER_LINEAR_EXACT)
 
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
             if 'cnt' in locals():
                 cv2.drawContours(self.calibrate_frame, [cnt], 0, (0,255,0),2)
                 box = np.int0(cv2.boxPoints(rect))
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
-                #cv2.rectangle(self.cap_frame, (x, y), (x + w, y + h), (255,0,255), 8)
 
     def read_frame(self):
         self.__streamcap()
