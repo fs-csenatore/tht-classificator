@@ -1,30 +1,17 @@
 import os
 import threading
 import logging
-import numpy as np
-import cv2
-import time
 import argparse
-from SettingsFile import xmlSettings
-from FrameProcessing import FrameProccessing
 from sshkeyboard import listen_keyboard
-from dataclasses import dataclass
-import multiprocessing as mp
+import multiprocessing
 from multiprocessing import shared_memory
-from FSBoard import MED3_rev100
-import enum
-from queue import Empty
+from FSBoard import  Boards
+import mp
+import sys
+import ctypes
+import time
 
-class Boards(enum.Enum):
-    MED3_REV100 = 1
-
-@dataclass
-class Keyboard:
-    f5: bool
-    f6: bool
-    f7: bool
-
-key_pressed = Keyboard(False, False, False)
+key_pressed = mp.Keyboard(False, False, False)
 
 def press(key):
     if key=='f5':
@@ -50,38 +37,27 @@ def listen_keyboard_wrapper():
         delay_other_chars=0.1,
     )
 
-class STOPFLAG(): pass
-class SAVEVOC(): pass
 
-def process_classification(queue: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):
-    shm = shared_memory.SharedMemory(name=shm_name)
-    img_stack = np.ndarray((320,320,3), dtype="uint8", buffer=shm.buf)
-    logging.basicConfig(level=log_level)
+# inspired by https://github.com/mosquito/crew/blob/master/crew/worker/thread.py
+def kill_thread(
+        thread: threading.Thread, exception: BaseException=KeyboardInterrupt
+) -> None:
+    if not thread.is_alive():
+        return
 
-    img_stack[:,:,:] = np.ones((320,320,3))*255
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        ctypes.c_long(thread.ident), ctypes.py_object(exception)
+    )
 
-    while True:
-        try:
-            index = queue.get(1)
-        except Empty:
-            logging.error("Close Classification process")
-            break
+    if res == 0:
+        raise ValueError('nonexistent thread id')
+    elif res > 1:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(thread.ident, None)
+        raise SystemError('PyThreadState_SetAsyncExc failed')
 
-        if isinstance(index, STOPFLAG):
-            logging.debug("got stop signal\n Exit Classification process")
-            break
+    while thread.is_alive():
+        time.sleep(0.01)
 
-        img = np.zeros((320,320,3), dtype=np.uint8)
-        with lock:
-            img[:,:,:] = img_stack[:,:,:]
-
-        match board:
-            case Boards.MED3_REV100:
-                currentBoard = MED3_rev100(img)
-
-        if isinstance(index, SAVEVOC):
-            logging.debug("create Image")
-            currentBoard.save_voc('/home/weston/dataset_train')
 
 def main():
 
@@ -94,8 +70,6 @@ def main():
     dataset_path = working_path + '/data_set'
     if not os.path.exists(dataset_path):
         os.makedirs(dataset_path)
-
-    imgcnt=0
 
     #parse Programm arguments
     parser = argparse.ArgumentParser(description='THT-Classificator: Erkenne und bewerte THT-Steckverbinder')
@@ -115,76 +89,53 @@ def main():
     if args.board == "MED3_rev1.00":
         board = Boards.MED3_REV100
 
-    #Prepair multiprocessing for classification
-    if args.maintain:
-        sh_array_lock = mp.Lock()
-        shared_img = shared_memory.SharedMemory(create=True, size=(320*320*3))
-        img_stack = np.ndarray((320,320,3), dtype="uint8", buffer=shared_img.buf)
-        class_queue = mp.Queue()
-        frame_index = 0
-        classProcess = mp.Process(target=process_classification, args=(class_queue, shared_img.name, sh_array_lock, board, logging.getLogger().getEffectiveLevel()))
-        classProcess.start()
-
-    #Start GStreamer
-    Settings= xmlSettings(args.settings)
-    img_processing = FrameProccessing(Settings)
+    if hasattr(args, "settings"):
+        settings_path = args.settings
+    else:
+        logging.error("Settings-Path is required")
+        exit(1)
 
     #Set Keyboard polling
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
         thread = threading.Thread(target=listen_keyboard_wrapper)
         thread.start()
 
-    #MAIN loop
-    while True:
-        img_processing.update()
+    sh_buff_lock = multiprocessing.Lock()
+    shared_img = shared_memory.SharedMemory(create=True, size=(320*320*3))
 
-        #Draw Rectangle around object
-        if hasattr(img_processing, 'scaled_box'):
-            x, y, w, h = cv2.boundingRect(img_processing.scaled_box)
-            cv2.drawContours(img_processing.cap_frame, [img_processing.scaled_box], 0, (255,255,0),2)
-            cv2.rectangle(img_processing.cap_frame, (x, y), (x + w, y + h), (0,0,255), 4)
+    #Prepair multiprocessing for classification
+    if args.maintain:
+        class_queue = multiprocessing.Queue()
+        classProcess = multiprocessing.Process(target=mp.process_classification, args=(class_queue, shared_img.name, sh_buff_lock, board, logging.getLogger().getEffectiveLevel()))
+        classProcess.start()
 
-        #Show Captured Frame
-        img_processing.wrt_frame[:,
-            img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1]:,
-            :] = img_processing.cap_frame
+    #Prepair multiprocessing for Img-Processing
+        prep_queue = multiprocessing.Queue()
+        prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
+        prepProcess.start()
 
-        #when debug is enabled
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+    try:
+        while True:
+            try:
+                signal = prep_queue.get()
+            except:
+                break
 
-            #Show Calibration Frame
-            if hasattr(img_processing, 'calibrate_frame'):
-                try:
-                    shape1 = img_processing.calibrate_frame.shape
-                    img_processing.wrt_frame[0:shape1[0], 0:shape1[1], :] = img_processing.calibrate_frame
-                except:
-                    logging.error("Could not display calibrate_frame")
+            if isinstance(signal, mp.PUT):
+                class_queue.put(1)
 
-            #Show rotated object
-            if hasattr(img_processing, 'object_img'):
-                try:
-                    shape2 = img_processing.object_img.shape
-                    board = MED3_rev100(img_processing.object_img)
-                    board.draw_boundingbox()
-                    img_processing.wrt_frame[0:shape2[0], img_processing.wrt_frame.shape[1]-shape2[1]:, :] = board.image
-                except:
-                    logging.error("Could not display object_img")
+            if key_pressed.f5:
+                class_queue.put(mp.SAVEVOC())
+                key_pressed.f5 = False
+    except:
+        logging.info("Exception uccored")
 
-                #when maintain is enabled
-                if args.maintain:
-                    if key_pressed.f5:
-                        logging.debug("extand Dataset")
-                        class_queue.put(SAVEVOC())
-                        key_pressed.f5 = False
-
-                    frame_index = frame_index + 1
-                    if frame_index % 5 == 0:
-                        with sh_array_lock:
-                            img_stack[:,:,:] = img_processing.object_img[:,:,:]
-
-                            class_queue.put(frame_index)
-
-            img_processing.Settings.parse(args.settings)
+    logging.info("closing")
+    classProcess.terminate()
+    prepProcess.terminate()
+    shared_img.unlink()
+    kill_thread(thread)
+    sys.exit(1)
 
 if __name__ == '__main__':
     main()

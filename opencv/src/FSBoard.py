@@ -3,6 +3,10 @@ import cv2
 from dataclasses import dataclass
 import xml.etree.ElementTree as xmlET
 from datetime import datetime
+import enum
+
+class Boards(enum.Enum):
+    MED3_REV100 = 1
 
 @dataclass
 class boundingbox:
