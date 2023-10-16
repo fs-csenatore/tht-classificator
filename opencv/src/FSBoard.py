@@ -51,6 +51,21 @@ class MED3_rev100():
 
     def __init__(self, med3_img: np.ndarray ):
         self.image = med3_img.copy()
+        self.detection_labels = (
+            'J6',
+            'J12',
+            'J14',
+            'J10',
+            'J09',
+            'J11',
+            'J09_11',
+            'J13',
+            'J2',
+            'J3',
+            'C59',
+            'J4',
+            'MED3-REV1.00'
+            )
 
     "Save Image and create a VOC xml file"
     def save_voc(self, dataset_rootpath: str):

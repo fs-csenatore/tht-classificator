@@ -70,21 +70,21 @@ class FrameProccessing():
                 logging.debug("drop frameId=%d",frameId)
                 self.__cap_gst.grab()
 
-    """
-    __streamwrite
-    write frame to gstreamer
-    """
     def __streamwrite(self):
+        """
+        __streamwrite
+        write frame to gstreamer
+        """
         if not self.Settings.is_streamwrite_colored():
             self.wrt_frame = cv2.cvtColor(self.wrt_frame,
                                                cv2.COLOR_BGR2GRAY)
         self.__wrt_gst.write(self.wrt_frame)
 
-    """
-    __streamcap
-    get frame from gstreamer
-    """
     def __streamcap(self):
+        """
+        __streamcap
+        get frame from gstreamer
+        """
         if not self.__get_frame():
             logging.error('stream is broken')
             assert False, "can't get new frame. Stream is broken"
@@ -99,11 +99,6 @@ class FrameProccessing():
         #    self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[0], self.__dist_data[1], None, newcameramtx)
 
 
-    """
-    get_thresh_mask
-    determines which color spectrum is to be considered and creates
-    a mask over the desired colors.
-    """
     def __get_threshhold_mask(
             self,
             frame, #: cv2.typing.MatLike,  #cv2.typing.MatLike does not work in opencv < 4.8
@@ -111,20 +106,23 @@ class FrameProccessing():
             upperBound :tuple,
             frame_convert = cv2.COLOR_BGR2HSV,
     ):
+        """
+        determines which color spectrum is to be considered and creates
+        a mask over the desired colors.
+        """
         frame = cv2.cvtColor(frame, frame_convert)
         #Blur helps to remove nois in background
         frame = cv2.medianBlur(frame,7)
         mask = cv2.inRange(frame, lowerBound, upperBound)
         return mask
 
-    """
-    get_masked_image
-    Returns only the color information that is covered by a mask.
-    """
     def __get_masked_image(self,
             frame, #: cv2.typing.MatLike,
             mask,  #: cv2.typing.MatLike,
         ):
+        """
+        Returns only the color information that is covered by a mask.
+        """
         img_masked = np.zeros_like(frame, np.uint8)
         imask = np.greater(mask,0)
         img_masked[imask] = frame[imask]
@@ -147,11 +145,11 @@ class FrameProccessing():
                              int(rect[1][1] * scale_factor))
         return tuple(resized_rect)
 
-    '''
-    Get a framesize to work with.
-    it scalse the captured frame down with a ratio of 1/3 per axis
-    '''
     def __get_working_framesize(self):
+        '''
+        Get a framesize to work with.
+        it scalse the captured frame down with a ratio of 1/3 per axis
+        '''
         working_frame_res = list(
             self.Settings.get_streamcap_resolution())
 
@@ -159,10 +157,10 @@ class FrameProccessing():
         working_frame_res[1] = int(working_frame_res[1]/3)
         return tuple(working_frame_res)
 
-    '''
-    Scale minareaRect from Working frame size to capture frame size
-    '''
     def __scale_minAreaRect(self, rect):
+        '''
+        Scale minareaRect from Working frame size to capture frame size
+        '''
         tmp_rect = list(rect)
         working_frame_res = self.Settings.get_streamcap_resolution()
         if working_frame_res[0] == 1920 or \
@@ -173,10 +171,10 @@ class FrameProccessing():
 
         return tuple(tmp_rect)
 
-    """
-    Rotate bounding-box-img and minarearect, so that x:y where x>y
-    """
     def __rotate_rect(self, rect, bounded_object):
+        """
+        Rotate bounding-box-img and minarearect, so that x:y where x>y
+        """
         tmp_rect = list(rect)
         if rect[1][1]<rect[1][0] and rect[2] > 45:
             bounded_object = cv2.rotate(bounded_object, cv2.ROTATE_90_COUNTERCLOCKWISE)

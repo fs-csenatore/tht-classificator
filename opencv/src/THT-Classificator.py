@@ -10,6 +10,7 @@ import mp
 import sys
 import ctypes
 import time
+from queue import Empty
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -101,32 +102,46 @@ def main():
         thread.start()
 
     sh_buff_lock = multiprocessing.Lock()
-    shared_img = shared_memory.SharedMemory(create=True, size=(320*320*3))
+    shared_img = shared_memory.SharedMemory(create=True, size=(2*320*320*3))
 
     #Prepair multiprocessing for classification
     if args.maintain:
-        class_queue = multiprocessing.Queue()
-        classProcess = multiprocessing.Process(target=mp.process_classification, args=(class_queue, shared_img.name, sh_buff_lock, board, logging.getLogger().getEffectiveLevel()))
+        class_queue_in = multiprocessing.Queue()
+        class_queue_out = multiprocessing.Queue()
+        classProcess = multiprocessing.Process(target=mp.process_classification, args=(class_queue_in, class_queue_out, shared_img.name, sh_buff_lock, board, logging.getLogger().getEffectiveLevel()))
         classProcess.start()
 
     #Prepair multiprocessing for Img-Processing
-        prep_queue = multiprocessing.Queue()
-        prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
+        prep_queue_in = multiprocessing.Queue()
+        prep_queue_out = multiprocessing.Queue()
+        prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
         prepProcess.start()
 
     try:
         while True:
+            prep_signal = prep_queue_out.get()
+        
             try:
-                signal = prep_queue.get()
-            except:
-                break
-
-            if isinstance(signal, mp.PUT):
-                class_queue.put(1)
+                class_signal = class_queue_out.get(False)
+            except Empty:
+                class_signal = None
+                
+            if isinstance(prep_signal, mp.PUT):
+                class_queue_in.put(1)
 
             if key_pressed.f5:
-                class_queue.put(mp.SAVEVOC())
+                class_queue_in.put(mp.SAVEVOC())
                 key_pressed.f5 = False
+            
+            if isinstance(class_signal, mp.STOPFLAG):
+                break
+            
+            if isinstance(class_signal, mp.PUT):
+                prep_queue_in.put(mp.PUT())
+
+            if isinstance(prep_signal, mp.STOPFLAG):
+                break
+
     except:
         logging.info("Exception uccored")
 
