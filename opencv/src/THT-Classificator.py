@@ -11,6 +11,8 @@ import sys
 import ctypes
 import time
 from queue import Empty
+import traceback 
+
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -97,25 +99,23 @@ def main():
         exit(1)
 
     #Set Keyboard polling
-    if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        thread = threading.Thread(target=listen_keyboard_wrapper)
-        thread.start()
+    thread = threading.Thread(target=listen_keyboard_wrapper)
+    thread.start()
 
     sh_buff_lock = multiprocessing.Lock()
     shared_img = shared_memory.SharedMemory(create=True, size=(2*320*320*3))
 
     #Prepair multiprocessing for classification
-    if args.maintain:
-        class_queue_in = multiprocessing.Queue()
-        class_queue_out = multiprocessing.Queue()
-        classProcess = multiprocessing.Process(target=mp.process_classification, args=(class_queue_in, class_queue_out, shared_img.name, sh_buff_lock, board, logging.getLogger().getEffectiveLevel()))
-        classProcess.start()
+    class_queue_in = multiprocessing.Queue()
+    class_queue_out = multiprocessing.Queue()
+    classProcess = multiprocessing.Process(target=mp.process_classification, args=(class_queue_in, class_queue_out, shared_img.name, sh_buff_lock, board, logging.getLogger().getEffectiveLevel()))
+    classProcess.start()
 
     #Prepair multiprocessing for Img-Processing
-        prep_queue_in = multiprocessing.Queue()
-        prep_queue_out = multiprocessing.Queue()
-        prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
-        prepProcess.start()
+    prep_queue_in = multiprocessing.Queue()
+    prep_queue_out = multiprocessing.Queue()
+    prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
+    prepProcess.start()
 
     try:
         while True:
@@ -144,6 +144,8 @@ def main():
 
     except:
         logging.info("Exception uccored")
+        traceback.print_exc()
+
 
     logging.info("closing")
     classProcess.terminate()

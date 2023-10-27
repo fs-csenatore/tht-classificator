@@ -122,17 +122,16 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     interpreter.allocate_tensors()
 
     input_details = interpreter.get_input_details()
-    print("Input details: ", input_details)
     output_details = interpreter.get_output_details()
-    print("Output details: ", output_details)
-    print(input_details[0]['index'])
-
-    shm = shared_memory.SharedMemory(name=shm_name)
-    img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
     
+    if log_level == logging.DEBUG:
+        print("Input details: ", input_details)
+        print("Output details: ", output_details)
+        
     match board:
         case Boards.MED3_REV100:
-            currentBoard = MED3_rev100(working_path + '/tflite_label_map.txt')         
+            currentBoard = MED3_rev100(working_path + '/tflite_label_map.txt')
+
     try:
         while True:
             #To Communicate with other Processes, we use Queues.
@@ -148,7 +147,6 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             
             
             currentBoard.set_img(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            
             
             results = detect_objects(interpreter,currentBoard.image, threshold=0.3)
 
@@ -202,15 +200,17 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 
 
 def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, log_level: int):
+    #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
+    tmp_image = np.zeros((320,320,3)).astype(np.uint8)
     frame_index = 0
+    od_every_n_frame = 5
 
     #Start GStreamer
     Settings= xmlSettings(settings_path)
     img_processing = FrameProccessing(Settings)
 
-    tmp_image = np.zeros((320,320,3)).astype(np.uint8)
     try:
         while True:
             img_processing.update()
@@ -219,8 +219,7 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
             if hasattr(img_processing, "object_img"):
                 frame_index = frame_index + 1
 
-                #first of all, use only every 5th object
-                if frame_index % 1 == 0:
+                if frame_index % od_every_n_frame == 1:
                     with lock:
                         img_buf[0][:,:,:] = img_processing.object_img[:,:,:]
                     
@@ -232,10 +231,24 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                 cv2.drawContours(img_processing.cap_frame, [img_processing.scaled_box], 0, (255,255,0),2)
                 cv2.rectangle(img_processing.cap_frame, (x, y), (x + w, y + h), (0,0,255), 4)
 
+
             #Show Captured Frame
-            img_processing.wrt_frame[:,
-                img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1]:,
-                :] = img_processing.cap_frame
+            if log_level == logging.DEBUG:
+                img_processing.wrt_frame[:,
+                    img_processing.wrt_frame.shape[1]-img_processing.cap_frame.shape[1]:,
+                    :] = img_processing.cap_frame
+            else:
+                img_processing.wrt_frame[:,
+                    :img_processing.cap_frame.shape[1],
+                    :] = img_processing.cap_frame
+
+            #Show AI result
+            with lock:
+                tmp_image = img_buf[1][:,:,:]
+
+            tmp_image = cv2.resize(tmp_image, (700, 700))
+            img_processing.wrt_frame[img_processing.wrt_frame.shape[0]-700:, img_processing.wrt_frame.shape[1]-700:, :] = tmp_image[:,:,:]
+
 
             #when debug is enabled
             if log_level == logging.DEBUG:
@@ -255,21 +268,11 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                         shape2 = img_processing.object_img.shape
                         img_processing.wrt_frame[0:shape2[0], img_processing.wrt_frame.shape[1]-shape2[1]:, :] = img_processing.object_img[:,:,:]
 
-                        #Show AI result
-                        try:
-                            signal = queue_in.get(False)
-                        except Empty:
-                            pass
-
-                        if isinstance(signal, PUT):
-                            with lock:
-                                tmp_image = img_buf[1][:,:,:]
-
-                        tmp_image = cv2.resize(tmp_image, (600, 600))
-                        img_processing.wrt_frame[shape2[0]:shape2[0]+600, img_processing.wrt_frame.shape[1]-600:, :] = tmp_image[:,:,:]
                     except:
                         traceback.print_exc() 
                         logging.error("Could not display object_img")
+    
+
 
                 img_processing.Settings.parse(settings_path)
     except:
