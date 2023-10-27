@@ -3,6 +3,7 @@ import cv2
 from dataclasses import dataclass
 import xml.etree.ElementTree as xmlET
 import enum
+import random
 
 class Boards(enum.Enum):
     MED3_REV100 = 1
@@ -55,10 +56,19 @@ def get_labels(label_map_path: str):
     
     return label_dict
 
+def random_color():
+    r = random.randint(0, 255)
+    g = random.randint(0, 255)
+    b = random.randint(0, 255)
+    return (r, g, b)
+
 class MED3_rev100():
 
     def __init__(self, label_map_path: str):
         self.detection_labels = get_labels(label_map_path)
+        self.labels_color = list()
+        for _ in self.detection_labels:
+            self.labels_color.append(random_color())
 
     def set_img(self, med3_img: np.ndarray):
         self.image = med3_img.copy()

@@ -14,8 +14,7 @@ import os.path
 from FSBoard import Boards
 import time
 from datetime import datetime
-import traceback 
-
+import traceback
 
 #Process Signals  
 class STOPFLAG(): pass
@@ -31,20 +30,10 @@ class Keyboard:
     f6: bool
     f7: bool
 
-def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
-    """Returns a list of detection results, each a dictionary of object info."""
-    
-    #model_input shape is (1xheightxwidthxdepth) -> we must expand the img data
-    input_data = np.expand_dims(image, axis=0)
+def normalize_input_tensor(tensor: np.ndarray):
+    return (np.float32(tensor) - 127.5) / 127.5
 
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-
-    #Normalize input data
-    floating_model = input_details[0]['dtype'] == np.float32
-    if floating_model:
-        input_data = (np.float32(input_data) - 127.5) / 127.5
-
+def determine_output_index(output_details):
     # Check output layer name to determine if this model was created with TF2 or TF1
     if ('StatefulPartitionedCall' in output_details[0]['name']):
         # This is a TF2 model
@@ -53,19 +42,27 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
         # This is a TF1 model
         boxes_idx, classes_idx, scores_idx, count_idx = 0, 1, 2, 3
 
+    return  boxes_idx, classes_idx, scores_idx, count_idx
+
+def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.0):
+    """Returns a list of detection results, each a dictionary of object info."""
+    
+    #model_input shape is (1xheightxwidthxdepth) -> we must expand the img data
+    input_tensor= np.expand_dims(image, axis=0)
+
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    if input_details[0]['dtype'] == np.float32:
+        input_tensor = normalize_input_tensor(input_tensor)
+
+    boxes_idx, classes_idx, scores_idx, count_idx = \
+        determine_output_index(output_details)
+
     start_time = time.time()
     # Perform the actual detection by running the model with the image as input
-    try:
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-    except ValueError:
-        print('ValueError in set_tensor')
-        raise Exception("Object detection crashed")
-    
-    try:
-        interpreter.invoke()
-    except ValueError:
-        print('ValueError in invoke')
-        raise Exception("Object detection crashed")
+    interpreter.set_tensor(input_details[0]['index'], input_tensor)
+    interpreter.invoke()
     end_time = time.time()
     logging.debug("Detection-Runtime in ms =%f",(end_time-start_time)*10**3)
     
@@ -75,6 +72,7 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
     classes = interpreter.get_tensor(output_details[classes_idx]['index'])[0]
     count = int(interpreter.get_tensor(output_details[count_idx]['index'])[0])
 
+    #Get all detected objects and return the highest score from each class_id
     results = list()
     for i in range(count):
         if scores[i] >= threshold:
@@ -84,7 +82,17 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
                 'score': scores[i],
             }
             results.append(result)
-    return results
+
+    results = sorted(results, key=lambda x: x['score'], reverse=True)
+
+    objects = list()
+    obj_idx = list()
+    for obj in results:
+        if obj['class_id'] not in obj_idx:
+            obj_idx.append(obj['class_id'])
+            objects.append(obj)
+
+    return objects
 
 def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):    
     #Init shared buffer
@@ -161,8 +169,8 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
                 x1 = int(x1 * currentBoard.image.shape[1])
                 x2 = int(x2 * currentBoard.image.shape[1])
             
-                color = (255,0,0)
                 class_id = int(obj['class_id'])
+                color = currentBoard.labels_color[class_id]
                 cv2.rectangle(currentBoard.image, (x1, y1), (x2, y2), color, 2)
                 # Make adjustments to make the label visible for all objects
                 y = y1 - 15 if y1 - 15 > 15 else y1 + 15
