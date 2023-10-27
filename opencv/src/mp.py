@@ -34,7 +34,9 @@ class Keyboard:
 def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
     """Returns a list of detection results, each a dictionary of object info."""
     
+    #model_input shape is (1xheightxwidthxdepth) -> we must expand the img data
     input_data = np.expand_dims(image, axis=0)
+
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
@@ -43,8 +45,7 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
     if floating_model:
         input_data = (np.float32(input_data) - 127.5) / 127.5
 
-    # Check output layer name to determine if this model was created with TF2 or TF1,
-    # because outputs are ordered differently for TF2 and TF1 models
+    # Check output layer name to determine if this model was created with TF2 or TF1
     if ('StatefulPartitionedCall' in output_details[0]['name']):
         # This is a TF2 model
         boxes_idx, classes_idx, scores_idx, count_idx = 1, 3, 0, 2
@@ -75,7 +76,6 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
     count = int(interpreter.get_tensor(output_details[count_idx]['index'])[0])
 
     results = list()
-    print(count)
     for i in range(count):
         if scores[i] >= threshold:
             result = {
@@ -87,6 +87,10 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.5):
     return results
 
 def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):    
+    #Init shared buffer
+    shm = shared_memory.SharedMemory(name=shm_name)
+    img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
+    
     #check working dir
     home_path = os.path.expanduser("~")
     working_path = home_path + '/.tht-classificator'
@@ -94,7 +98,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         os.makedirs(working_path)
 
     if board == Boards.MED3_REV100:
-        model_file = 'med3_detect_efficientdet_lite0_vela.tflite'
+        model_file = 'MED3_ssd_mobilenet_v2_320x320_fpnlite_vela.tflite'
     else:
         logging.error("Board not defined!")
         queue_out.put(STOPFLAG())
@@ -111,6 +115,8 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         queue_out.close()
         return 1
     
+    #To run on Ethos-U or GPU, we need delegates.
+    #To run on CPU, remove delegate attribute in tflite.Interpreter
     ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
     interpreter = tflite.Interpreter(model_file,experimental_delegates=ext_delegate)
     interpreter.allocate_tensors()
@@ -123,8 +129,14 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
+    
+    match board:
+        case Boards.MED3_REV100:
+            currentBoard = MED3_rev100(working_path + '/tflite_label_map.txt')         
     try:
         while True:
+            #To Communicate with other Processes, we use Queues.
+            #Each Queue Entry that is put, is a uniqe class 
             signal = queue_in.get()
             if isinstance(signal, STOPFLAG):
                 logging.debug("got stop signal\n Exit Classification process")
@@ -135,13 +147,10 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
                 img[:,:,:] = img_buf[0][:,:,:]
             
             
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            currentBoard.set_img(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             
-            match board:
-                case Boards.MED3_REV100:
-                    currentBoard = MED3_rev100(img)         
             
-            results = detect_objects(interpreter,currentBoard.image)
+            results = detect_objects(interpreter,currentBoard.image, threshold=0.3)
 
             """
             bounding_box contains two points y1, x1 and y2, x2.
@@ -169,6 +178,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             
             queue_out.put(PUT())
 
+            #Make a screenshot
             if isinstance(signal, SAVEVOC):
                 print("create Image")
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -177,6 +187,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
                 imagesets_path = dataset_rootpath + "/ImageSets"
                 cv2.imwrite(imagesets_path + '/MED3-REV1.00_' + timestamp + '.jpg', img)
             
+            #TODO: Implement inference with doAI Singal
             if isinstance(signal, doAI):
                 pass
     except:
@@ -204,6 +215,7 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
         while True:
             img_processing.update()
 
+            #Send Board Img to Classification Process
             if hasattr(img_processing, "object_img"):
                 frame_index = frame_index + 1
 
