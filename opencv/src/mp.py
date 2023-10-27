@@ -13,6 +13,10 @@ import tflite_runtime.interpreter as tflite
 import os.path
 from FSBoard import Boards
 import time
+from datetime import datetime
+import traceback 
+
+
 #Process Signals  
 class STOPFLAG(): pass
 class SAVEVOC(): pass
@@ -144,7 +148,6 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             The Values are standardized and must be scaled to image.shape
             """
             for obj in results:
-                logging.debug(obj)
                 y1, x1, y2, x2 = obj['bounding_box']
                 y1 = int(y1 * currentBoard.image.shape[0])
                 y2 = int(y2 * currentBoard.image.shape[0])
@@ -168,11 +171,16 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 
             if isinstance(signal, SAVEVOC):
                 print("create Image")
-                currentBoard.save_voc('/home/weston/dataset_train')
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                dataset_rootpath = '/home/weston/dataset_train'
+                imagesets_path = dataset_rootpath + "/ImageSets"
+                cv2.imwrite(imagesets_path + '/MED3-REV1.00_' + timestamp + '.jpg', img)
             
             if isinstance(signal, doAI):
                 pass
     except:
+        traceback.print_exc()
         logging.error('exception uccoured')
         logging.error("Close Classification process")
     
@@ -245,8 +253,10 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                             with lock:
                                 tmp_image = img_buf[1][:,:,:]
 
-                        img_processing.wrt_frame[shape2[0]:shape2[0]*2, img_processing.wrt_frame.shape[1]-shape2[1]:, :] = tmp_image[:,:,:]
+                        tmp_image = cv2.resize(tmp_image, (600, 600))
+                        img_processing.wrt_frame[shape2[0]:shape2[0]+600, img_processing.wrt_frame.shape[1]-600:, :] = tmp_image[:,:,:]
                     except:
+                        traceback.print_exc() 
                         logging.error("Could not display object_img")
 
                 img_processing.Settings.parse(settings_path)
