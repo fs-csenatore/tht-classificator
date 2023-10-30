@@ -94,10 +94,30 @@ def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.0):
 
     return objects
 
+def draw_results(board: Boards, results: list):
+    """
+    bounding_box contains two points y1, x1 and y2, x2.
+    The Values are standardized and must be scaled to image.shape
+    """
+    for obj in results:
+        y1, x1, y2, x2 = obj['bounding_box']
+        y1 = int(y1 * board.image.shape[0])
+        y2 = int(y2 * board.image.shape[0])
+        x1 = int(x1 * board.image.shape[1])
+        x2 = int(x2 * board.image.shape[1])
+
+        class_id = int(obj['class_id'])
+        color = board.labels_color[class_id]
+        cv2.rectangle(board.image, (x1, y1), (x2, y2), color, 2)
+        # Make adjustments to make the label visible for all objects
+        y = y1 - 5 if y1 - 5 > 5 else y1 + 5
+        label = "{}: {:.0f}%".format(board.detection_labels[class_id], obj['score'] * 100)
+        cv2.putText(board.image, label, (x1, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
 def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):    
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
-    img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
+    img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
     
     #check working dir
     home_path = os.path.expanduser("~")
@@ -106,7 +126,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         os.makedirs(working_path)
 
     if board == Boards.MED3_REV100:
-        model_file = 'MED3_ssd_mobilenet_v2_320x320_fpnlite_vela.tflite'
+        model_file = 'med3_det_ssd_mobilenet_v2_fpn_320x320_vela_cal10.tflite'
     else:
         logging.error("Board not defined!")
         queue_out.put(STOPFLAG())
@@ -149,36 +169,19 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
                 logging.debug("got stop signal\n Exit Classification process")
                 break
             
-            img = np.zeros((320,320,3), dtype=np.uint8)
+            img = np.zeros((640,640,3), dtype=np.uint8)
             with lock:
                 img[:,:,:] = img_buf[0][:,:,:]
             
             
-            currentBoard.set_img(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            currentBoard.set_img(cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), (320,320),interpolation=cv2.INTER_LINEAR_EXACT))
             
             results = detect_objects(interpreter,currentBoard.image, threshold=0.3)
 
-            """
-            bounding_box contains two points y1, x1 and y2, x2.
-            The Values are standardized and must be scaled to image.shape
-            """
-            for obj in results:
-                y1, x1, y2, x2 = obj['bounding_box']
-                y1 = int(y1 * currentBoard.image.shape[0])
-                y2 = int(y2 * currentBoard.image.shape[0])
-                x1 = int(x1 * currentBoard.image.shape[1])
-                x2 = int(x2 * currentBoard.image.shape[1])
+            currentBoard.set_img(img)
+            draw_results(currentBoard, results)
             
-                class_id = int(obj['class_id'])
-                color = currentBoard.labels_color[class_id]
-                cv2.rectangle(currentBoard.image, (x1, y1), (x2, y2), color, 2)
-                # Make adjustments to make the label visible for all objects
-                y = y1 - 15 if y1 - 15 > 15 else y1 + 15
-                label = "{}: {:.0f}%".format(currentBoard.detection_labels[class_id], obj['score'] * 100)
-                cv2.putText(currentBoard.image, label, (x1, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            
-            currentBoard.image = cv2.cvtColor(currentBoard.image, cv2.COLOR_RGB2BGR)
+            #currentBoard.image = cv2.cvtColor(currentBoard.image, cv2.COLOR_RGB2BGR)
             with lock:
                 img_buf[1][:,:,:] = currentBoard.image[:,:,:]
             
@@ -187,7 +190,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             #Make a screenshot
             if isinstance(signal, SAVEVOC):
                 print("create Image")
-                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                #img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 dataset_rootpath = '/home/weston/dataset_train'
                 imagesets_path = dataset_rootpath + "/ImageSets"
@@ -210,8 +213,8 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, log_level: int):
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
-    img_buf = np.ndarray((2,320,320,3), dtype="uint8", buffer=shm.buf)
-    tmp_image = np.zeros((320,320,3)).astype(np.uint8)
+    img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
+    tmp_image = np.zeros((640,640,3),np.uint8)
     frame_index = 0
     od_every_n_frame = 5
 
@@ -250,13 +253,6 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                     :img_processing.cap_frame.shape[1],
                     :] = img_processing.cap_frame
 
-            #Show AI result
-            with lock:
-                tmp_image = img_buf[1][:,:,:]
-
-            tmp_image = cv2.resize(tmp_image, (700, 700))
-            img_processing.wrt_frame[img_processing.wrt_frame.shape[0]-700:, img_processing.wrt_frame.shape[1]-700:, :] = tmp_image[:,:,:]
-
 
             #when debug is enabled
             if log_level == logging.DEBUG:
@@ -279,11 +275,17 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                     except:
                         traceback.print_exc() 
                         logging.error("Could not display object_img")
-    
-
 
                 img_processing.Settings.parse(settings_path)
+
+            #Show AI result
+            with lock:
+                tmp_image = img_buf[1][:,:,:]
+
+            tmp_image = cv2.resize(tmp_image, (700, 700))
+            img_processing.wrt_frame[img_processing.wrt_frame.shape[0]-700:, img_processing.wrt_frame.shape[1]-700:, :] = tmp_image[:,:,:]
     except:
+        traceback.print_exc()
         queue_out.put(STOPFLAG())
         shm.close()
         queue_in.close()

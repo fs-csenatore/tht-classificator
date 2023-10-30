@@ -19,7 +19,7 @@ class FrameProccessing():
         if self.Settings.get_distortion_file() != None:
             self.dist_data = self.__get_distortion_data()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()
-        self.wrt_frame = np.uint8(np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3)))
+        self.wrt_frame = np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3), np.uint8)
 
     #Currently only FullHD or HD as Input resolution is supported
     def __check_Settings(self):
@@ -255,12 +255,12 @@ class FrameProccessing():
                 object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
                            int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
 
-                if object_img.shape[0] > 5 and object_img.shape[1] > 5:
-                    #Resize object image to a 320x320 image
-                    max_size = max(object_img.shape[0], object_img.shape[1])
-                    self.object_img = np.zeros((max_size, max_size, 3))
+                #Format image with 1:1. The Image size is variable
+                max_size = max(object_img.shape[0], object_img.shape[1])
+                if max_size > 100:
+                    self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
                     self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
-                    self.object_img = cv2.resize(self.object_img,(320,320), interpolation=cv2.INTER_LINEAR_EXACT)
+                    self.object_img = cv2.resize(self.object_img,(640,640), interpolation=cv2.INTER_LINEAR_EXACT)
 
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
