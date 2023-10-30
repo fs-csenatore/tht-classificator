@@ -238,7 +238,7 @@ class FrameProccessing():
                 min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
                 max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
                 logging.debug("object is truncated")
-                return
+                pass
 
             #get board within bounding box
             self.bounded_object = self.cap_frame[
