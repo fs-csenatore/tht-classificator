@@ -57,9 +57,9 @@ def get_labels(label_map_path: str):
     return label_dict
 
 def random_color():
-    r = random.randint(0, 255)
-    g = random.randint(0, 255)
-    b = random.randint(0, 255)
+    r = random.randint(120, 255)
+    g = random.randint(0, 100)
+    b = random.randint(120, 255)
     return (r, g, b)
 
 class MED3_rev100():
@@ -69,6 +69,7 @@ class MED3_rev100():
         self.labels_color = list()
         for _ in self.detection_labels:
             self.labels_color.append(random_color())
+        self.image: np.ndarray
 
     def set_img(self, med3_img: np.ndarray):
         self.image = med3_img.copy()

@@ -256,8 +256,8 @@ class FrameProccessing():
                            int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
 
                 #Format image with 1:1. The Image size is variable
-                max_size = max(object_img.shape[0], object_img.shape[1])
-                if max_size > 100:
+                if object_img.shape[0] > 100 and object_img.shape[1] > 100:
+                    max_size = max(object_img.shape[0], object_img.shape[1])
                     self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
                     self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
                     self.object_img = cv2.resize(self.object_img,(640,640), interpolation=cv2.INTER_LINEAR_EXACT)
