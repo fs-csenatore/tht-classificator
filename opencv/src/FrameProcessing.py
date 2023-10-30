@@ -112,7 +112,7 @@ class FrameProccessing():
         """
         frame = cv2.cvtColor(frame, frame_convert)
         #Blur helps to remove nois in background
-        frame = cv2.medianBlur(frame,7)
+        frame = cv2.blur(frame, (20,20))
         mask = cv2.inRange(frame, lowerBound, upperBound)
         return mask
 
@@ -131,7 +131,7 @@ class FrameProccessing():
     def __create_working_frame(self):
         return cv2.resize(self.cap_frame,
                           self.__get_working_framesize(),
-                          interpolation=cv2.INTER_LINEAR)
+                          interpolation=cv2.INTER_NEAREST)
 
     # like cv2.minAreaRect(cnt) but it includes a litle offset
     def __get_minAreaRect(self, cnt):
@@ -205,15 +205,13 @@ class FrameProccessing():
         mask = self.__get_threshhold_mask(self.working_frame,
                                       self.Settings.get_hsv_boundings()[0],
                                       self.Settings.get_hsv_boundings()[1])
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL,
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                                 cv2.CHAIN_APPROX_SIMPLE)
 
         if hasattr(self,'bounded_object'):
             del self.bounded_object
         if hasattr(self,'object_img'):
             del self.object_img
-        if hasattr(self, 'scaled_box'):
-            del self.scaled_box
         if hasattr(self,'bounded_object'):
             del self.bounded_object
         if hasattr(self,'object_img'):
@@ -227,7 +225,6 @@ class FrameProccessing():
             scaled_rect = self.__scale_minAreaRect(rect)
             scaled_box = cv2.boxPoints(scaled_rect)
             scaled_box = np.intp(scaled_box)
-            self.scaled_box = scaled_box
             x, y, w, h = cv2.boundingRect(scaled_box)
 
             #Get bounding Object
@@ -244,7 +241,7 @@ class FrameProccessing():
             self.bounded_object = self.cap_frame[
                 max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
                 max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
-                :].copy()
+                :]
 
             #Rotate board
             if hasattr(self.bounded_object, 'shape') and self.bounded_object.shape[0] > 0 and self.bounded_object.shape[1] > 0:
@@ -254,6 +251,7 @@ class FrameProccessing():
                 object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
                 rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
                 object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
+                #Cut Board from rotated image
                 object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
                            int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
 
