@@ -7,14 +7,12 @@ from FSBoard import MED3_rev100, Boards
 from FrameProcessing import FrameProccessing
 from SettingsFile import xmlSettings
 import cv2
-from queue import Empty
 from dataclasses import dataclass
 import tflite_runtime.interpreter as tflite
 import os.path
-from FSBoard import Boards
-import time
 from datetime import datetime
 import traceback
+import FSBoard
 
 #Process Signals  
 class STOPFLAG(): pass
@@ -30,89 +28,6 @@ class Keyboard:
     f6: bool
     f7: bool
 
-def normalize_input_tensor(tensor: np.ndarray):
-    return (np.float32(tensor) - 127.5) / 127.5
-
-def determine_output_index(output_details):
-    # Check output layer name to determine if this model was created with TF2 or TF1
-    if ('StatefulPartitionedCall' in output_details[0]['name']):
-        # This is a TF2 model
-        boxes_idx, classes_idx, scores_idx, count_idx = 1, 3, 0, 2
-    else:
-        # This is a TF1 model
-        boxes_idx, classes_idx, scores_idx, count_idx = 0, 1, 2, 3
-
-    return  boxes_idx, classes_idx, scores_idx, count_idx
-
-def detect_objects(interpreter: tflite.Interpreter, image, threshold=0.0):
-    """Returns a list of detection results, each a dictionary of object info."""
-    
-    #model_input shape is (1xheightxwidthxdepth) -> we must expand the img data
-    input_tensor= np.expand_dims(image, axis=0)
-
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-
-    if input_details[0]['dtype'] == np.float32:
-        input_tensor = normalize_input_tensor(input_tensor)
-
-    boxes_idx, classes_idx, scores_idx, count_idx = \
-        determine_output_index(output_details)
-
-    start_time = time.time()
-    # Perform the actual detection by running the model with the image as input
-    interpreter.set_tensor(input_details[0]['index'], input_tensor)
-    interpreter.invoke()
-    end_time = time.time()
-    logging.debug("Detection-Runtime in ms =%f",(end_time-start_time)*10**3)
-    
-    # Retrieve detection results
-    boxes = interpreter.get_tensor(output_details[boxes_idx]['index'])[0]
-    scores = interpreter.get_tensor(output_details[scores_idx]['index'])[0]
-    classes = interpreter.get_tensor(output_details[classes_idx]['index'])[0]
-    count = int(interpreter.get_tensor(output_details[count_idx]['index'])[0])
-
-    #Get all detected objects and return the highest score from each class_id
-    results = list()
-    for i in range(count):
-        if scores[i] >= threshold:
-            result = {
-                'bounding_box': boxes[i],
-                'class_id': classes[i],
-                'score': scores[i],
-            }
-            results.append(result)
-
-    results = sorted(results, key=lambda x: x['score'], reverse=True)
-
-    objects = list()
-    obj_idx = list()
-    for obj in results:
-        if obj['class_id'] not in obj_idx:
-            obj_idx.append(obj['class_id'])
-            objects.append(obj)
-
-    return objects
-
-def draw_results(board: Boards, results: list):
-    """
-    bounding_box contains two points y1, x1 and y2, x2.
-    The Values are standardized and must be scaled to image.shape
-    """
-    for obj in results:
-        y1, x1, y2, x2 = obj['bounding_box']
-        y1 = int(y1 * board.image.shape[0])
-        y2 = int(y2 * board.image.shape[0])
-        x1 = int(x1 * board.image.shape[1])
-        x2 = int(x2 * board.image.shape[1])
-
-        class_id = int(obj['class_id'])
-        color = board.labels_color[class_id]
-        cv2.rectangle(board.image, (x1, y1), (x2, y2), color, 2)
-        # Make adjustments to make the label visible for all objects
-        y = y1 - 5 if y1 - 5 > 5 else y1 + 5
-        label = "{}: {:.0f}%".format(board.detection_labels[class_id], obj['score'] * 100)
-        cv2.putText(board.image, label, (x1, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
 def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):    
     #Init shared buffer
@@ -126,7 +41,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         os.makedirs(working_path)
 
     if board == Boards.MED3_REV100:
-        model_file = 'med3_det_ssd_mobilenet_v2_fpn_320x320_vela_cal10.tflite'
+        model_file = 'MED3_ssd_mobilenet_v2_640x640_fpnlite_vela.tflite'
     else:
         logging.error("Board not defined!")
         queue_out.put(STOPFLAG())
@@ -142,23 +57,12 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         queue_in.close()
         queue_out.close()
         return 1
-    
-    #To run on Ethos-U or GPU, we need delegates.
-    #To run on CPU, remove delegate attribute in tflite.Interpreter
-    ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
-    interpreter = tflite.Interpreter(model_file,experimental_delegates=ext_delegate)
-    interpreter.allocate_tensors()
-
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    
-    if log_level == logging.DEBUG:
-        print("Input details: ", input_details)
-        print("Output details: ", output_details)
-        
+  
     match board:
-        case Boards.MED3_REV100:
-            currentBoard = MED3_rev100(working_path + '/tflite_label_map.txt')
+        case FSBoard.Boards.MED3_REV100:
+            label_map_file = working_path + '/tflite_label_map.txt'
+
+            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, 0)
 
     try:
         while True:
@@ -173,17 +77,11 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             with lock:
                 img[:,:,:] = img_buf[0][:,:,:]
             
-            
-            currentBoard.set_img(cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), (320,320),interpolation=cv2.INTER_LINEAR_EXACT))
-            
-            results = detect_objects(interpreter,currentBoard.image, threshold=0.3)
-
             currentBoard.set_img(img)
-            draw_results(currentBoard, results)
+            currentBoard.get_results()
             
-            #currentBoard.image = cv2.cvtColor(currentBoard.image, cv2.COLOR_RGB2BGR)
             with lock:
-                img_buf[1][:,:,:] = currentBoard.image[:,:,:]
+                img_buf[1][:,:,:] = currentBoard.get_result_image()
             
             queue_out.put(PUT())
 
