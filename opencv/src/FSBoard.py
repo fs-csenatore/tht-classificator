@@ -29,7 +29,6 @@ class object_detection():
         delegate=0 => No delegate, run on CPU
         delegate=1 => use delegate, run on ethos-u
         """
-
         if delegate == 1:
             ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
         else:
@@ -256,6 +255,20 @@ class MED3_rev100(object_detection, boards):
         C59_objs = list()
         J4_objs = list()
         J13_objs = list()
+        med3_objs = list()
+
+        self.board_dict = {"J6": J6_objs,
+                      "J12": J12_objs,
+                      "J14": J14_objs,
+                      "J11": J11_objs,
+                      "J10": J10_objs,
+                      "J09": J09_objs,
+                      "J3": J3_objs,
+                      "J2": J2_objs,
+                      "C59": C59_objs,
+                      "J4": J4_objs,
+                      "J13": J13_objs,
+                      "MED3": med3_objs}
 
         #Sort Object according to reference identifier
         for obj in detected_objects:
@@ -355,21 +368,18 @@ class MED3_rev100(object_detection, boards):
                     J13_objs.append(obj)
                     skip = True
                     break
-        
+            if skip:
+                continue
+
+            for id in self.__MED3_label_ids:
+                if obj['class_id'] == id:
+                    med3_objs.append(obj)
+                    skip = True
+                    break
+
         #Determine if a board is OK or if faults have been detected.
-        for ref_objs in (J6_objs,
-                            J12_objs,
-                            J14_objs,
-                            J11_objs,
-                            J10_objs,
-                            J09_objs,
-                            J3_objs,
-                            J2_objs,
-                            C59_objs,
-                            J4_objs,
-                            J13_objs,
-                            ):
-            
+        for key, ref_objs in self.board_dict.items():
+
             #Check if we have Labels with similar scores
             #These labels are likely to contain incorrect classifications.
             if len(ref_objs) > 1:
@@ -390,8 +400,12 @@ class MED3_rev100(object_detection, boards):
                 else:
                     self.draw_faulty_object(obj)
 
-            if len(ref_objs) !=0:
-                if self.detection_labels[ref_objs[0]['class_id']].endswith('_ok'):
+            elif len(ref_objs) == 1:
+                if self.detection_labels[ref_objs[0]['class_id']].endswith('_ok') \
+                            or self.detection_labels[ref_objs[0]['class_id']].startswith("MED3"):
                     self.draw_good_object(ref_objs[0])
                 else:
-                    self.draw_faulty_object(ref_objs[0])        
+                    self.draw_faulty_object(ref_objs[0])
+            else:
+                msg = key + " not found"
+                logging.debug(msg)
