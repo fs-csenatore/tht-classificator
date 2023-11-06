@@ -7,6 +7,8 @@ import random
 import tflite_runtime.interpreter as tflite
 import time
 import logging
+from datetime import datetime
+
 
 class Boards(enum.Enum):
     MED3_REV100 = 1
@@ -18,7 +20,55 @@ class boundingbox:
     ymax: int
     xmax: int
 
-class object_detection():
+class pascal_voc(xmlET.ElementTree):
+    def __init__(self, img_name:str):
+        super().__init__(xmlET.Element("annotation"))
+        
+        folder = xmlET.SubElement(self.getroot(), "folder")
+        folder.text = "ImageSet"
+        
+        filename = xmlET.SubElement(self.getroot(), "filename")
+        filename.text = img_name
+
+        source = xmlET.SubElement(self.getroot(), "source")
+        database = xmlET.SubElement(source, "database")
+        database.text = "Unknown"
+
+        size = xmlET.SubElement(self.getroot(), "size")
+        width = xmlET.SubElement(size, "width")
+        height = xmlET.SubElement(size, "height")
+        depth = xmlET.SubElement(size, "depth")
+        width.text = str(640)
+        height.text = str(640)
+        depth.text = str(3)
+
+        segmented = xmlET.SubElement(self.getroot(), "segmented")
+        segmented.text = str(0)
+
+    def __xml_create_object_label(self, label: str):
+        object = xmlET.SubElement(self.getroot(), "object")
+        name = xmlET.SubElement(object, "name")
+        name.text = label
+
+        return object
+
+    def xml_add_bbox_label(self, label: str, bbox: boundingbox):
+        object = self.__xml_create_object_label(label)
+        bndbox = xmlET.SubElement(object, "bndbox")
+        xmin = xmlET.SubElement(bndbox, "xmin")
+        ymin = xmlET.SubElement(bndbox, "ymin")
+        xmax = xmlET.SubElement(bndbox, "xmax")
+        ymax = xmlET.SubElement(bndbox, "ymax")
+        xmin.text = str(bbox.xmin)
+        xmax.text = str(bbox.xmax)
+        ymin.text = str(bbox.ymin)
+        ymax.text = str(bbox.ymax)
+
+    def write_xml(self, filename: str):
+        xmlET.indent(self,space="\t", level=0)
+        self.write(filename,encoding="unicode", xml_declaration=True, method="xml")
+
+class object_detection:
     def __init__(self, model_file: str, delegate: int = 0):
         """
         create a interpreter for object detection.
@@ -29,7 +79,7 @@ class object_detection():
         delegate=0 => No delegate, run on CPU
         delegate=1 => use delegate, run on ethos-u
         """
-
+        print(model_file)
         if delegate == 1:
             ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
         else:
@@ -144,10 +194,15 @@ class boards:
         b = 0
         return (r, g, b)
 
-    def set_img(self, med3_img: np.ndarray):
-        self.image = cv2.cvtColor(med3_img, cv2.COLOR_BGR2RGB)
+    def set_img(self, img: np.ndarray):
+        self.image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.result_image = self.image.copy()
-    
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+        self.img_name = self.board_name + '_' + timestamp + ".jpg"
+        self.xml_name = self.board_name + '_' + timestamp + ".xml"
+
+        self.voc = pascal_voc(self.img_name)
+
     def get_img(self):
         return cv2.cvtColor(self.image, cv2.COLOR_RGB2BGR)
 
@@ -171,6 +226,7 @@ class boards:
     def __draw_object(self, bndbox: boundingbox, label: str, score, color: tuple):
         self.__draw_rectangle(bndbox, color)
         self.__draw_text(bndbox, label, score, color)
+        self.voc.xml_add_bbox_label(label, bndbox)
     
     def draw_good_object(self, object: dict):
         bndbox = object['bounding_box']
@@ -196,6 +252,7 @@ class MED3_rev100(object_detection, boards):
 
     def __init__(self, model_file, label_map_file: str ,delegate: int = 0):
         super().__init__(model_file, delegate)
+        self.board_name = "MED3-rev1.00"
         
         #Get defined labels from tflite label map
         self.get_labels(label_map_file)
@@ -409,3 +466,8 @@ class MED3_rev100(object_detection, boards):
             else:
                 msg = key + " not found"
                 logging.debug(msg)
+
+    def make_screenshot(self, path: str):
+        cv2.imwrite(path + '/' + self.img_name, cv2.cvtColor(self.image, cv2.COLOR_RGB2BGR))
+        self.voc.write_xml(path + '/' + self.xml_name)
+

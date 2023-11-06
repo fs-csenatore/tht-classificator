@@ -62,7 +62,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         case FSBoard.Boards.MED3_REV100:
             label_map_file = working_path + '/tflite_label_map.txt'
 
-            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, 0)
+            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, 1)
 
     try:
         while True:
@@ -88,12 +88,9 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             #Make a screenshot
             if isinstance(signal, SAVEVOC):
                 print("create Image")
-                #img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 dataset_rootpath = '/home/weston/dataset_train'
-                imagesets_path = dataset_rootpath + "/ImageSets"
-                cv2.imwrite(imagesets_path + '/MED3-REV1.00_' + timestamp + '.jpg', img)
-            
+                currentBoard.make_screenshot(dataset_rootpath)
+
             #TODO: Implement inference with doAI Singal
             if isinstance(signal, doAI):
                 pass
@@ -128,7 +125,7 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
             if hasattr(img_processing, "object_img"):
                 frame_index = frame_index + 1
 
-                if frame_index % od_every_n_frame == 1:
+                if frame_index % od_every_n_frame == 0:
                     with lock:
                         img_buf[0][:,:,:] = img_processing.object_img[:,:,:]
                     
