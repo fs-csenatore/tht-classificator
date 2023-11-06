@@ -29,6 +29,7 @@ class object_detection():
         delegate=0 => No delegate, run on CPU
         delegate=1 => use delegate, run on ethos-u
         """
+
         if delegate == 1:
             ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
         else:
@@ -80,10 +81,12 @@ class object_detection():
         results = list()
         for i in range(count):
             if scores[i] >= threshold:
+                bbox_ymin , bbox_xmin, bbox_ymax , bbox_xmax = boxes[i]
+                bndbox = self.__get_absolute_bndbox(bbox_ymin , bbox_xmin, bbox_ymax , bbox_xmax)
                 result = {
-                    'bounding_box': boxes[i],
+                    'bounding_box': bndbox,
                     'class_id': classes[i],
-                    'score': scores[i],
+                    'score': int(scores[i]*100),
                 }
                 results.append(result)
 
@@ -98,7 +101,15 @@ class object_detection():
 
         return objects
 
-class boards():
+    def __get_absolute_bndbox(self, ymin: float, xmin: float, ymax: float, xmax: float):
+        bndbox = boundingbox(0,0,0,0)
+        bndbox.ymin = int(ymin * self.image.shape[0])
+        bndbox.xmin = int(xmin * self.image.shape[1])
+        bndbox.ymax = int(ymax * self.image.shape[0])
+        bndbox.xmax = int(xmax * self.image.shape[1])
+        return bndbox
+
+class boards:
     def get_labels(self, label_map_file: str):
         "create a dict with lables and ids from a tflite_label_map"
         with open(label_map_file, 'r') as file:
@@ -143,14 +154,6 @@ class boards():
     def get_result_image(self):
         return cv2.cvtColor(self.result_image, cv2.COLOR_RGB2BGR)
     
-    def __get_absolute_bndbox(self, ymin: float, xmin: float, ymax: float, xmax: float):
-        bndbox = boundingbox(0,0,0,0)
-        bndbox.ymin = int(ymin * self.image.shape[0])
-        bndbox.xmin = int(xmin * self.image.shape[1])
-        bndbox.ymax = int(ymax * self.image.shape[0])
-        bndbox.xmax = int(xmax * self.image.shape[1])
-        return bndbox
-    
     def __draw_rectangle(self, bndbox: boundingbox, color: tuple):
         ymin = bndbox.ymin
         xmin = bndbox.xmin
@@ -162,7 +165,7 @@ class boards():
         # Put label next to bndbox
         y = bndbox.ymin - 5 if bndbox.ymin - 5 > 5 else bndbox.ymin + 5
 
-        label = "{}: {:.0f}%".format(label, label_score * 100)
+        label = "{}: {:0d}%".format(label, label_score)
         cv2.putText(self.result_image, label, (bndbox.xmin, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     def __draw_object(self, bndbox: boundingbox, label: str, score, color: tuple):
@@ -170,22 +173,19 @@ class boards():
         self.__draw_text(bndbox, label, score, color)
     
     def draw_good_object(self, object: dict):
-        ymin, xmin, ymax, xmax = object['bounding_box']
-        bndbox = self.__get_absolute_bndbox(ymin, xmin, ymax, xmax)
+        bndbox = object['bounding_box']
         label = self.detection_labels[object['class_id']]
         score = object['score']
         self.__draw_object(bndbox, label, score, self.__good_color())
 
     def draw_faulty_object(self, object: dict):
-        ymin, xmin, ymax, xmax = object['bounding_box']
-        bndbox = self.__get_absolute_bndbox(ymin, xmin, ymax, xmax)
+        bndbox = object['bounding_box']
         label = self.detection_labels[object['class_id']]
         score = object['score']
         self.__draw_object(bndbox, label, score,self.__faulty_color())
     
     def draw_undef_object(self, object: dict):
-        ymin, xmin, ymax, xmax = object['bounding_box']
-        bndbox = self.__get_absolute_bndbox(ymin, xmin, ymax, xmax)
+        bndbox = object['bounding_box']
         label: str = self.detection_labels[object['class_id']]
         label = label[:label.rfind('_')]
         label = label + "_undefined"
@@ -393,7 +393,7 @@ class MED3_rev100(object_detection, boards):
 
                     diff_score = max_score - sndmax_score
                 
-                if diff_score < 0.2:
+                if diff_score < 30:
                     self.draw_undef_object(obj)
                 elif self.detection_labels[obj['class_id']].endswith('_ok'):
                     self.draw_good_object(obj)
