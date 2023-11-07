@@ -9,3 +9,10 @@ __pycache__/*/
 *.pyd
 #setuptools
 build/
+dist/THT_Classificator-0.1.0-py3.11.egg
+src/THT_Classificator.egg-info/dependency_links.txt
+src/THT_Classificator.egg-info/entry_points.txt
+src/THT_Classificator.egg-info/PKG-INFO
+src/THT_Classificator.egg-info/requires.txt
+src/THT_Classificator.egg-info/SOURCES.txt
+src/THT_Classificator.egg-info/top_level.txt
