@@ -8,7 +8,7 @@ import logging
 import cv2
 #import cv2.typing does not work in 4.7
 import numpy as np
-from SettingsFile import xmlSettings
+from THTClassificator.SettingsFile import xmlSettings
 import pickle
 
 class FrameProccessing():

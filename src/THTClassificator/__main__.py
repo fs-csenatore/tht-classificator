@@ -5,8 +5,8 @@ import argparse
 from sshkeyboard import listen_keyboard
 import multiprocessing
 from multiprocessing import shared_memory
-from FSBoard import  Boards
-import mp
+from THTClassificator.FSBoard import Boards
+import THTClassificator.mp as mp
 import sys
 import ctypes
 import time

@@ -3,16 +3,15 @@ import multiprocessing as mp
 from multiprocessing import shared_memory
 from queue import Empty
 import numpy as np
-from FSBoard import MED3_rev100, Boards
-from FrameProcessing import FrameProccessing
-from SettingsFile import xmlSettings
+from THTClassificator.FrameProcessing import FrameProccessing
+from THTClassificator.SettingsFile import xmlSettings
 import cv2
 from dataclasses import dataclass
 import tflite_runtime.interpreter as tflite
 import os.path
 from datetime import datetime
 import traceback
-import FSBoard
+from THTClassificator import FSBoard
 
 #Process Signals  
 class STOPFLAG(): pass
@@ -29,7 +28,7 @@ class Keyboard:
     f7: bool
 
 
-def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: Boards, log_level: int):    
+def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: FSBoard.Boards, log_level: int):    
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
@@ -40,7 +39,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     if not os.path.exists(working_path):
         os.makedirs(working_path)
 
-    if board == Boards.MED3_REV100:
+    if board == FSBoard.Boards.MED3_REV100:
         model_file = 'MED3_ssd_mobilenet_v2_640x640_fpnlite_vela.tflite'
     else:
         logging.error("Board not defined!")
