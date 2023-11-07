@@ -1,6 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
 <Settings>
-	
 	<!-- threshhold bounding for mask generation --> 
 	<HSV>
 		<lowerBound>
@@ -14,7 +13,6 @@
 			<V>200</V>
 		</upperBound>
 	</HSV>
-	
 	<!-- Video Input Settings -->
 	<StreamCap>
 		<framerate>6</framerate>
@@ -27,9 +25,8 @@
 		<Frame-Format>YUY2</Frame-Format>
 		<rotation>2</rotation>
 		<dist-en>False</dist-en>
-		<dist-file>/home/root/.tht-classificator/distortion.pkl</dist-file>
+		<dist-file>distortion_1440x1080.pkl</dist-file>
 	</StreamCap>
-	
 	<!-- Video Output Settings -->
 	<StreamWrite>
 		<framerate>5</framerate>
@@ -38,4 +35,17 @@
 		<!-- Frame-Format = BGR/GRAY8 -->
 		<Frame-Format>BGR</Frame-Format>
 	</StreamWrite>
+	<tflite>
+		<inference>
+			<model-file>tflite-file.tflite</model-file>
+			<label-map>tflite_label_map.txt</label-map>
+			<!--
+				delegate:
+				0=>CPU
+				1=>ethos-u
+			-->
+			<delegate>1</delegate>
+		</inference>
+		<dataset-path>dataset</dataset-path>
+	</tflite>
 </Settings>

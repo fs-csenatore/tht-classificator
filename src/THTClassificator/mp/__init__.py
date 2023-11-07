@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import os.path
 import traceback
 from THTClassificator import FSBoard
+from THTClassificator.SettingsFile import xmlSettings
 
 #Process Signals  
 class STOPFLAG(): pass
@@ -30,14 +31,11 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
     
-    #check working dir
-    home_path = os.path.expanduser("~")
-    working_path = home_path + '/.tht-classificator'
-    if not os.path.exists(working_path):
-        os.makedirs(working_path)
+    settings  = xmlSettings()
 
     if board == FSBoard.Boards.MED3_REV100:
-        model_file = 'MED3_ssd_mobilenet_v2_640x640_fpnlite_vela.tflite'
+        model_file = settings.tflite_get_model_path()
+        label_map_file = settings.tflite_get_label_path()
     else:
         logging.error("Board not defined!")
         queue_out.put(STOPFLAG())
@@ -45,10 +43,15 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
         queue_out.close()
         return 1
 
-    if os.path.isfile(working_path + '/' + model_file):
-        model_file = working_path + '/' + model_file
-    else:
+    if not os.path.isfile(model_file):
         logging.error('Vela-Model not found!')
+        queue_out.put(STOPFLAG())
+        queue_in.close()
+        queue_out.close()
+        return 1
+
+    if not os.path.isfile(label_map_file):
+        logging.error('Label map not found!')
         queue_out.put(STOPFLAG())
         queue_in.close()
         queue_out.close()
@@ -56,7 +59,6 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
   
     match board:
         case FSBoard.Boards.MED3_REV100:
-            label_map_file = working_path + '/tflite_label_map.txt'
 
             currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, 1)
 
@@ -84,8 +86,10 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             #Make a screenshot
             if isinstance(signal, SAVEVOC):
                 print("create Image")
-                dataset_rootpath = '/home/weston/dataset_train'
-                currentBoard.make_screenshot(dataset_rootpath)
+                
+                if not os.path.exists(settings.tflite_get_dataset_path()):
+                    os.makedirs(settings.tflite_get_dataset_path())
+                currentBoard.make_screenshot(settings.tflite_get_dataset_path())
 
             #TODO: Implement inference with doAI Singal
             if isinstance(signal, doAI):

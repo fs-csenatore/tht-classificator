@@ -17,7 +17,6 @@ class xmlSettings(xmlET.ElementTree):
     def set_default_value(self):
         std_xml_file = os.path.join(os.path.dirname(__file__),
                                     'Settings.xml',)
-        print(std_xml_file)
         self.parse(std_xml_file)
 
 
@@ -107,7 +106,7 @@ class xmlSettings(xmlET.ElementTree):
 
 
     def get_distortion_file(self):
-        return self.findtext('StreamCap/dist-file')
+        return os.path.join(self.__workdir, self.findtext('StreamCap/dist-file'))
 
 
     def is_distortion_enabled(self):
@@ -116,9 +115,25 @@ class xmlSettings(xmlET.ElementTree):
         else:
             return False
 
-    
+
     def load(self):
         self.parse(self.__xml_file)
-        
+
+    
+    def tflite_get_model_path(self):
+        return os.path.join(self.__workdir, self.findtext('tflite/inference/model-file'))
+
+
+    def tflite_get_label_path(self):
+        return os.path.join(self.__workdir, self.findtext('tflite/inference/label-map'))
+
+
+    def tflite_get_delegate(self):
+        return int(self.findtext('tflite/inference/model-file'))
+    
+    
+    def tflite_get_dataset_path(self):
+        return os.path.join(os.path.expanduser("~"), self.findtext('tflite/dataset-path'))
+
     
         

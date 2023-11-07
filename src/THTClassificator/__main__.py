@@ -14,6 +14,7 @@ from queue import Empty
 import traceback 
 import os
 import shutil
+from THTClassificator.SettingsFile import xmlSettings
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -89,8 +90,8 @@ def main():
             shutil.copy(os.path.join(bin_path, fname), working_path)
     
     if not xml_found:
-            shutil.copy(os.path.join(pkg_path, 'SettingsFile', 'Settings.xml'),
-                        working_path)
+        shutil.copy(os.path.join(pkg_path, 'SettingsFile', 'Settings.xml'),
+                    working_path)
 
     #parse Programm arguments
     parser = argparse.ArgumentParser(description='THT-Classificator: Erkenne und bewerte THT-Steckverbinder')
