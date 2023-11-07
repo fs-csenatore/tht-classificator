@@ -12,14 +12,13 @@ from THTClassificator.SettingsFile import xmlSettings
 import pickle
 
 class FrameProccessing():
-    def __init__(self, Settings: xmlSettings):
-        self.Settings = Settings
+    def __init__(self):
+        self.Settings = xmlSettings()
         self.__check_Settings()
         self.__init_gst()
-        if self.Settings.get_distortion_file() != None:
-            self.dist_data = self.__get_distortion_data()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()
         self.wrt_frame = np.zeros((wrt_frame_res[1], wrt_frame_res[0], 3), np.uint8)
+
 
     #Currently only FullHD or HD as Input resolution is supported
     def __check_Settings(self):
@@ -27,6 +26,7 @@ class FrameProccessing():
         assert cap_res == (1920, 1080) or \
             cap_res == (1280, 720), \
             "Incomming Frame Resolution is not supported"
+
 
     def __init_gst(self):
         logging.debug(self.Settings.get_streamcap_gstreamer_string())
@@ -51,13 +51,13 @@ class FrameProccessing():
         self.__cap_gst = cap_gst
         self.__wrt_gst = wrt_gst
 
+
     #Sets Frame-Rate for outgoing stream
     def __get_frame(self):
         fps = self.Settings.get_streamwrite_framerate()
-        #This is not the real FPS.
-        #It is the fixed value comming from v4l2src
+        #fps_stream is not the real FPS comming from source.
+        #It is the fixed value comming from v4l2-ctl --list-formats-ext
         fps_stream = int(round(self.__cap_gst.get(cv2.CAP_PROP_FPS)))
-        #assert fps_stream % fps == 0, "Outgoing frame rate must be an integer divisor"
         frames2skip = round(fps_stream / fps)
         while True:
             frameId = int(round(self.__cap_gst.get(cv2.CAP_PROP_POS_FRAMES)))
@@ -70,6 +70,7 @@ class FrameProccessing():
                 logging.debug("drop frameId=%d",frameId)
                 self.__cap_gst.grab()
 
+
     def __streamwrite(self):
         """
         __streamwrite
@@ -79,6 +80,7 @@ class FrameProccessing():
             self.wrt_frame = cv2.cvtColor(self.wrt_frame,
                                                cv2.COLOR_BGR2GRAY)
         self.__wrt_gst.write(self.wrt_frame)
+
 
     def __streamcap(self):
         """
@@ -94,9 +96,12 @@ class FrameProccessing():
         self.cap_frame = self.cap_frame[:,int(self.cap_frame.shape[1]*0.125):int(self.cap_frame.shape[1]*0.875),:]
 
         #undistort Image
-        #if hasattr(self, 'dist_data'):
-        #    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(self.__dist_data[0], self.__dist_data[1], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
-        #    self.cap_frame = cv2.undistort(self.cap_frame, self.__dist_data[0], self.__dist_data[1], None, newcameramtx)
+        if self.Settings.is_distortion_enabled() and \
+                self.Settings.get_distortion_file() != None:
+            
+            dist_data = self.__get_distortion_data()
+            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(dist_data[0], dist_data[1], self.cap_frame.shape[1::-1], 1, self.cap_frame.shape[1::-1])
+            self.cap_frame = cv2.undistort(self.cap_frame, dist_data[0], dist_data[1], None, newcameramtx)
 
 
     def __get_threshhold_mask(
@@ -116,6 +121,7 @@ class FrameProccessing():
         mask = cv2.inRange(frame, lowerBound, upperBound)
         return mask
 
+
     def __get_masked_image(self,
             frame, #: cv2.typing.MatLike,
             mask,  #: cv2.typing.MatLike,
@@ -128,10 +134,12 @@ class FrameProccessing():
         img_masked[imask] = frame[imask]
         return img_masked
 
+
     def __create_working_frame(self):
         return cv2.resize(self.cap_frame,
                           self.__get_working_framesize(),
                           interpolation=cv2.INTER_NEAREST)
+
 
     # like cv2.minAreaRect(cnt) but it includes a litle offset
     def __get_minAreaRect(self, cnt):
@@ -145,6 +153,7 @@ class FrameProccessing():
                              int(rect[1][1] * scale_factor))
         return tuple(resized_rect)
 
+
     def __get_working_framesize(self):
         '''
         Get a framesize to work with.
@@ -157,6 +166,7 @@ class FrameProccessing():
         working_frame_res[1] = int(working_frame_res[1]/3)
         return tuple(working_frame_res)
 
+
     def __scale_minAreaRect(self, rect):
         '''
         Scale minareaRect from Working frame size to capture frame size
@@ -168,8 +178,8 @@ class FrameProccessing():
             tmp_rect[1] = (rect[1][0]*3, rect[1][1]*3)
             tmp_rect[0] = (rect[0][0]*3, rect[0][1]*3)
 
-
         return tuple(tmp_rect)
+
 
     def __rotate_rect(self, rect, bounded_object):
         """
@@ -192,12 +202,14 @@ class FrameProccessing():
 
         return tuple(tmp_rect), bounded_object
 
+
     #returnvalue is a tuple (mtx, dist, rvecs, tvecs)
     def __get_distortion_data(self):
         with open(self.Settings.get_distortion_file(), 'rb') as file:
             data = pickle.load(file)
 
         return data
+
 
     def __do_preprocess(self):
         #Get a Frame to work with
@@ -271,17 +283,20 @@ class FrameProccessing():
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
 
+
     def read_frame(self):
         self.__streamcap()
+
 
     def write_frame(self):
         self.__streamwrite()
 
-    """
-    update
-    write outgoing frame, get incoming frame and run preprocessing
-    """
+
     def update(self):
+        """
+        update
+        write outgoing frame, get incoming frame and run preprocessing
+        """
         self.__streamwrite()
         self.__streamcap()
         self.__do_preprocess()

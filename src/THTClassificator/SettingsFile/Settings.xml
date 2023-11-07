@@ -26,6 +26,7 @@
 		<Frame-Height>1080</Frame-Height>
 		<Frame-Format>YUY2</Frame-Format>
 		<rotation>2</rotation>
+		<dist-en>False</dist-en>
 		<dist-file>/home/root/.tht-classificator/distortion.pkl</dist-file>
 	</StreamCap>
 	

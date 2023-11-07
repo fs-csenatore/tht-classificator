@@ -1,15 +1,11 @@
 import logging
 import multiprocessing as mp
 from multiprocessing import shared_memory
-from queue import Empty
 import numpy as np
 from THTClassificator.FrameProcessing import FrameProccessing
-from THTClassificator.SettingsFile import xmlSettings
 import cv2
 from dataclasses import dataclass
-import tflite_runtime.interpreter as tflite
 import os.path
-from datetime import datetime
 import traceback
 from THTClassificator import FSBoard
 
@@ -19,6 +15,7 @@ class SAVEVOC(): pass
 class ACK(): pass
 class PUT(): pass
 class doAI(): pass
+
 
 #SSHKEYBOARD
 @dataclass
@@ -104,7 +101,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     queue_out.close()
 
 
-def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, log_level: int):
+def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, log_level: int):
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
@@ -113,8 +110,7 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
     od_every_n_frame = 5
 
     #Start GStreamer
-    Settings= xmlSettings(settings_path)
-    img_processing = FrameProccessing(Settings)
+    img_processing = FrameProccessing()
 
     try:
         while True:
@@ -170,7 +166,7 @@ def process_preprocess(settings_path: str, queue_in: mp.Queue, queue_out: mp.Que
                         traceback.print_exc() 
                         logging.error("Could not display object_img")
 
-                img_processing.Settings.parse(settings_path)
+                img_processing.Settings.load()
 
             #Show AI result
             with lock:

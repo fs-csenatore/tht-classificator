@@ -4,11 +4,11 @@ setuptools.setup(
  	name="THT-Classificator",
  	version="0.1.0",
 	python_requires=">=3.9",
-    packages=setuptools.find_packages(where="src"),
+    packages=setuptools.find_namespace_packages(where="src"),
     package_dir={"": "src"},
 	package_data={
         "THTClassificator.bin": ["*.pkl", "*.tflite"],
-        "SettingsFile": ["*.xml"],
+        "THTClassificator.SettingsFile": ["*.xml"],
         },
     include_package_data=True,
  	install_requires=[

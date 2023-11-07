@@ -12,6 +12,8 @@ import ctypes
 import time
 from queue import Empty
 import traceback 
+import os
+import shutil
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -60,21 +62,39 @@ def kill_thread(
         time.sleep(0.01)
 
 def main():
-
-    #create working dir
+    #ensures that working dir exists
     home_path = os.path.expanduser("~")
     working_path = home_path + '/.tht-classificator'
     if not os.path.exists(working_path):
         os.makedirs(working_path)
 
-    dataset_path = working_path + '/data_set'
-    if not os.path.exists(dataset_path):
-        os.makedirs(dataset_path)
+    #ensures that bin files are available
+    pkl_found = False
+    tflite_found = False
+    xml_found = False
+
+    for fname in os.listdir(working_path):
+        if fname.endswith('.pkl'):
+            pkl_found = True
+        if fname.endswith('.tflite'):
+            tflite_found = True
+        if fname.endswith('.xml'):
+            xml_found = True
+    pkg_path = os.path.dirname(__file__)
+    bin_path = os.path.join(pkg_path, 'bin')
+    for fname in os.listdir(bin_path):
+        if not pkl_found and fname.endswith('.pkl'):
+            shutil.copy(os.path.join(bin_path, fname), working_path)
+        elif not tflite_found and fname.endswith('.tflite'):
+            shutil.copy(os.path.join(bin_path, fname), working_path)
+    
+    if not xml_found:
+            shutil.copy(os.path.join(pkg_path, 'SettingsFile', 'Settings.xml'),
+                        working_path)
 
     #parse Programm arguments
     parser = argparse.ArgumentParser(description='THT-Classificator: Erkenne und bewerte THT-Steckverbinder')
     parser.add_argument('-b', '--board', type=str, help='Which board is evaluated?', default='MED3_rev1.00',choices=['MED3_rev1.00'])
-    parser.add_argument('-s', '--settings', type=str, help='Path to Settings-File', default=working_path + '/Settings.xml')
     parser.add_argument('-d', '--debug', action='store_true', help='print debugging messages')
     parser.add_argument('--maintain', action='store_true', help='Enable Maintain-Mode. It is used to create VOC datasets')
     args = parser.parse_args()
@@ -88,12 +108,6 @@ def main():
 
     if args.board == "MED3_rev1.00":
         board = Boards.MED3_REV100
-
-    if hasattr(args, "settings"):
-        settings_path = args.settings
-    else:
-        logging.error("Settings-Path is required")
-        exit(1)
 
     #Set Keyboard polling
     thread = threading.Thread(target=listen_keyboard_wrapper)
@@ -111,7 +125,7 @@ def main():
     #Prepair multiprocessing for Img-Processing
     prep_queue_in = multiprocessing.Queue()
     prep_queue_out = multiprocessing.Queue()
-    prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(settings_path, prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
+    prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
     prepProcess.start()
 
     try:
