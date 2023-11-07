@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Settings>
+	
+	<!-- threshhold bounding for mask generation --> 
+	<HSV>
+		<lowerBound>
+			<H>13</H>
+			<S>60</S>
+			<V>20</V>
+		</lowerBound>
+		<upperBound>
+			<H>115</H>
+			<S>255</S>
+			<V>200</V>
+		</upperBound>
+	</HSV>
+	
+	<!-- Video Input Settings -->
+	<StreamCap>
+		<framerate>6</framerate>
+		<!--
+			list-formats-ext in v4l2-ctl to see all stream-formats
+			1920x1080 / 1280x720
+		-->
+		<Frame-Width>1920</Frame-Width>
+		<Frame-Height>1080</Frame-Height>
+		<Frame-Format>YUY2</Frame-Format>
+		<rotation>2</rotation>
+		<dist-file>/home/root/.tht-classificator/distortion.pkl</dist-file>
+	</StreamCap>
+	
+	<!-- Video Output Settings -->
+	<StreamWrite>
+		<framerate>5</framerate>
+		<Frame-Width>1920</Frame-Width>
+		<Frame-Height>1080</Frame-Height>
+		<!-- Frame-Format = BGR/GRAY8 -->
+		<Frame-Format>BGR</Frame-Format>
+	</StreamWrite>
+</Settings>

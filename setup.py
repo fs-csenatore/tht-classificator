@@ -6,7 +6,11 @@ setuptools.setup(
 	python_requires=">=3.9",
     packages=setuptools.find_packages(where="src"),
     package_dir={"": "src"},
-	package_data={"bin": ["*.pkl", "*.tflite"]},
+	package_data={
+        "THTClassificator.bin": ["*.pkl", "*.tflite"],
+        "SettingsFile": ["*.xml"],
+        },
+    include_package_data=True,
  	install_requires=[
  		'opencv-python >=4.7.0',
  		'numpy',
