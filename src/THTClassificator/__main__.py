@@ -13,7 +13,6 @@ import time
 from queue import Empty
 import traceback 
 
-
 key_pressed = mp.Keyboard(False, False, False)
 
 def press(key):
@@ -40,7 +39,6 @@ def listen_keyboard_wrapper():
         delay_other_chars=0.1,
     )
 
-
 # inspired by https://github.com/mosquito/crew/blob/master/crew/worker/thread.py
 def kill_thread(
         thread: threading.Thread, exception: BaseException=KeyboardInterrupt
@@ -60,7 +58,6 @@ def kill_thread(
 
     while thread.is_alive():
         time.sleep(0.01)
-
 
 def main():
 
