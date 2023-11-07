@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as xmlET
 from os.path import isfile, expanduser
-import logging
+import os
 
 class xmlSettings(xmlET.ElementTree):
 
@@ -14,29 +14,9 @@ class xmlSettings(xmlET.ElementTree):
             self.write(xml_file,encoding="unicode", xml_declaration=True, method="xml")
 
     def set_default_value(self):
-        hsv = xmlET.SubElement(self.getroot(), "HSV")
-        lower_bound = xmlET.SubElement(hsv, "lowerBound")
-        upper_bound = xmlET.SubElement(hsv, "upperBound")
-        xmlET.SubElement(lower_bound, "H").text = "10"
-        xmlET.SubElement(lower_bound, "S").text = "30"
-        xmlET.SubElement(lower_bound, "V").text = "30"
-        xmlET.SubElement(upper_bound, "H").text = "130"
-        xmlET.SubElement(upper_bound, "S").text = "255"
-        xmlET.SubElement(upper_bound, "V").text = "255"
-
-        StreamCap = xmlET.SubElement(self.getroot(), "StreamCap")
-        xmlET.SubElement(StreamCap, "framerate").text = "5"
-        xmlET.SubElement(StreamCap, "Frame-Width").text ="1920"
-        xmlET.SubElement(StreamCap, "Frame-Height").text = "1080"
-        xmlET.SubElement(StreamCap, "Frame-Format").text = "YUY2"
-        xmlET.SubElement(StreamCap, 'rotation').text = '2'
-        xmlET.SubElement(StreamCap, 'dist-file').text = expanduser("~")+ '/.tht-classificator/distortion.pkl'
-
-        StreamWrite = xmlET.SubElement(self.getroot(), "StreamWrite")
-        xmlET.SubElement(StreamWrite, "framerate").text = "5"
-        xmlET.SubElement(StreamWrite, "Frame-Width").text ="1920"
-        xmlET.SubElement(StreamWrite, "Frame-Height").text = "1080"
-        xmlET.SubElement(StreamWrite, "Frame-Format").text = "GRAY8"
+        std_xml_file = os.path.join(os.path.dirname(__file__),'Settings.xml',)
+        print(std_xml_file)
+        self.parse(std_xml_file)
 
     def get_hsv_boundings(self):
         lowerH = int(self.findtext('HSV/lowerBound/H'))
