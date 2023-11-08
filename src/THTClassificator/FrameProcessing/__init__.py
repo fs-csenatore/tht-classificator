@@ -8,12 +8,12 @@ import logging
 import cv2
 #import cv2.typing does not work in 4.7
 import numpy as np
-from THTClassificator.SettingsFile import xmlSettings
+from THTClassificator.SettingsFile import FrameSettings
 import pickle
 
 class FrameProccessing():
     def __init__(self):
-        self.Settings = xmlSettings()
+        self.Settings = FrameSettings()
         self.__check_Settings()
         self.__init_gst()
         wrt_frame_res = self.Settings.get_streamwrite_resolution()

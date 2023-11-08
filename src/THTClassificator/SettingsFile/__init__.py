@@ -1,23 +1,35 @@
 import xml.etree.ElementTree as xmlET
 from os.path import isfile
 import os
-import shutil
+
 
 class xmlSettings(xmlET.ElementTree):
 
     def __init__(self):
         super().__init__(xmlET.Element('Settings'))
-        self.__workdir = os.path.join(os.path.expanduser("~"),
+        self.workdir = os.path.join(os.path.expanduser("~"),
                                         '.tht-classificator')
-        self.__xml_file =  os.path.join(self.__workdir,
+        self.xml_file =  os.path.join(self.workdir,
                                         'Settings.xml')
-        assert isfile(self.__xml_file)
-        self.parse(self.__xml_file)
+        assert isfile(self.xml_file)
+        self.parse(self.xml_file)
+
 
     def set_default_value(self):
         std_xml_file = os.path.join(os.path.dirname(__file__),
                                     'Settings.xml',)
         self.parse(std_xml_file)
+
+
+    def load(self):
+        self.parse(self.xml_file)
+
+
+
+
+class FrameSettings(xmlSettings):
+    def __init__(self):
+        super().__init__()
 
 
     def get_hsv_boundings(self):
@@ -106,7 +118,7 @@ class xmlSettings(xmlET.ElementTree):
 
 
     def get_distortion_file(self):
-        return os.path.join(self.__workdir, self.findtext('StreamCap/dist-file'))
+        return os.path.join(self.workdir, self.findtext('StreamCap/dist-file'))
 
 
     def is_distortion_enabled(self):
@@ -116,24 +128,24 @@ class xmlSettings(xmlET.ElementTree):
             return False
 
 
-    def load(self):
-        self.parse(self.__xml_file)
-
-    
-    def tflite_get_model_path(self):
-        return os.path.join(self.__workdir, self.findtext('tflite/inference/model-file'))
 
 
-    def tflite_get_label_path(self):
-        return os.path.join(self.__workdir, self.findtext('tflite/inference/label-map'))
+class TFLITESettings(xmlSettings):
+    def __init__(self):
+        super().__init__()
 
 
-    def tflite_get_delegate(self):
+    def get_model_path(self):
+        return os.path.join(self.workdir, self.findtext('tflite/inference/model-file'))
+
+
+    def get_label_path(self):
+        return os.path.join(self.workdir, self.findtext('tflite/inference/label-map'))
+
+
+    def get_delegate(self):
         return int(self.findtext('tflite/inference/model-file'))
     
     
-    def tflite_get_dataset_path(self):
+    def get_dataset_path(self):
         return os.path.join(os.path.expanduser("~"), self.findtext('tflite/dataset-path'))
-
-    
-        

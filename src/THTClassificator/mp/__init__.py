@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import os.path
 import traceback
 from THTClassificator import FSBoard
-from THTClassificator.SettingsFile import xmlSettings
+from THTClassificator.SettingsFile import TFLITESettings
 
 #Process Signals  
 class STOPFLAG(): pass
@@ -31,11 +31,11 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     shm = shared_memory.SharedMemory(name=shm_name)
     img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
     
-    settings  = xmlSettings()
+    settings  = TFLITESettings()
 
     if board == FSBoard.Boards.MED3_REV100:
-        model_file = settings.tflite_get_model_path()
-        label_map_file = settings.tflite_get_label_path()
+        model_file = settings.get_model_path()
+        label_map_file = settings.get_label_path()
     else:
         logging.error("Board not defined!")
         queue_out.put(STOPFLAG())
@@ -60,7 +60,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     match board:
         case FSBoard.Boards.MED3_REV100:
 
-            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, settings.tflite_get_delegate())
+            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, settings.get_delegate())
 
     try:
         while True:
@@ -87,9 +87,9 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             if isinstance(signal, SAVEVOC):
                 print("create Image")
                 
-                if not os.path.exists(settings.tflite_get_dataset_path()):
-                    os.makedirs(settings.tflite_get_dataset_path())
-                currentBoard.make_screenshot(settings.tflite_get_dataset_path())
+                if not os.path.exists(settings.get_dataset_path()):
+                    os.makedirs(settings.get_dataset_path())
+                currentBoard.make_screenshot(settings.get_dataset_path())
 
             #TODO: Implement inference with doAI Singal
             if isinstance(signal, doAI):
