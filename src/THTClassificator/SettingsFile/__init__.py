@@ -144,7 +144,7 @@ class TFLITESettings(xmlSettings):
 
 
     def get_delegate(self):
-        return int(self.findtext('tflite/inference/model-file'))
+        return int(self.findtext('tflite/inference/delegate'))
     
     
     def get_dataset_path(self):

@@ -216,14 +216,14 @@ class boards:
         xmax = bndbox.xmax
         cv2.rectangle(self.result_image, (xmin, ymin), (xmax, ymax), color, 2)
 
-    def __draw_text(self, bndbox: boundingbox, label: str, label_score: float, color: tuple):
+    def __draw_text(self, bndbox: boundingbox, label: str, label_score: int, color: tuple):
         # Put label next to bndbox
         y = bndbox.ymin - 5 if bndbox.ymin - 5 > 5 else bndbox.ymin + 5
 
         label = "{}: {:0d}%".format(label, label_score)
         cv2.putText(self.result_image, label, (bndbox.xmin, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    def __draw_object(self, bndbox: boundingbox, label: str, score, color: tuple):
+    def __draw_object(self, bndbox: boundingbox, label: str, score: int, color: tuple):
         self.__draw_rectangle(bndbox, color)
         self.__draw_text(bndbox, label, score, color)
         self.voc.xml_add_bbox_label(label, bndbox)

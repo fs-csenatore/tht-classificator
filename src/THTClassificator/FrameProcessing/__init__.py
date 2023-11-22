@@ -211,7 +211,7 @@ class FrameProccessing():
         return data
 
 
-    def __do_preprocess(self):
+    def __do_preprocess(self, skip_preprocess: bool):
         #Get a Frame to work with
         self.working_frame = self.__create_working_frame()
         mask = self.__get_threshhold_mask(self.working_frame,
@@ -226,53 +226,52 @@ class FrameProccessing():
             del self.object_img
         if hasattr(self,'bounded_object'):
             del self.bounded_object
-        if hasattr(self,'object_img'):
-            del self.object_img
 
         #TODO: Support more then one Board
         if contours:
             #create Boxing
             cnt = max(contours, key=cv2.contourArea)
             rect = self.__get_minAreaRect(cnt)
-            scaled_rect = self.__scale_minAreaRect(rect)
-            scaled_box = cv2.boxPoints(scaled_rect)
-            scaled_box = np.intp(scaled_box)
-            x, y, w, h = cv2.boundingRect(scaled_box)
+            if skip_preprocess == False:
+                scaled_rect = self.__scale_minAreaRect(rect)
+                scaled_box = cv2.boxPoints(scaled_rect)
+                scaled_box = np.intp(scaled_box)
+                x, y, w, h = cv2.boundingRect(scaled_box)
 
-            #Get bounding Object
-            offset = 10
+                #Get bounding Object
+                offset = 10
 
-            #is the board completly in frame
-            if max(0,y-offset) == 0 or \
-                min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
-                max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
-                logging.debug("object is truncated")
-                pass
+                #is the board completly in frame
+                if max(0,y-offset) == 0 or \
+                    min(y+h+offset,self.cap_frame.shape[0]) == self.cap_frame.shape[0] or \
+                    max(0,x-offset) == 0 or min(x+w+offset,self.cap_frame.shape[1]) == self.cap_frame.shape[1]:
+                    logging.debug("object is truncated")
+                    return 1
 
-            #get board within bounding box
-            self.bounded_object = self.cap_frame[
-                max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
-                max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
-                :]
+                #get board within bounding box
+                self.bounded_object = self.cap_frame[
+                    max(0,y-offset):min(y+h+offset,self.cap_frame.shape[0]),
+                    max(0,x-offset):min(x+w+offset,self.cap_frame.shape[1]),
+                    :]
 
-            #Rotate board
-            if hasattr(self.bounded_object, 'shape') and self.bounded_object.shape[0] > 0 and self.bounded_object.shape[1] > 0:
-                scaled_rect, self.bounded_object = self.__rotate_rect(scaled_rect, self.bounded_object)
+                #Rotate board
+                if hasattr(self.bounded_object, 'shape') and self.bounded_object.shape[0] > 0 and self.bounded_object.shape[1] > 0:
+                    scaled_rect, self.bounded_object = self.__rotate_rect(scaled_rect, self.bounded_object)
 
-                #assume. that the center of bbox is same as in minAreaRect
-                object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
-                rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
-                object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
-                #Cut Board from rotated image
-                object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
-                           int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
+                    #assume. that the center of bbox is same as in minAreaRect
+                    object_center = tuple(i/2 for i in self.bounded_object.shape[0:2])
+                    rot_mat = cv2.getRotationMatrix2D(object_center, scaled_rect[2],1)
+                    object_img = cv2.warpAffine(self.bounded_object, rot_mat, self.bounded_object.shape[1::-1], flags=cv2.INTER_LINEAR)
+                    #Cut Board from rotated image
+                    object_img = object_img[int(object_center[0]-(scaled_rect[1][1]/2)):int(object_center[0]+(scaled_rect[1][1]/2)),
+                                int(object_center[1]-(scaled_rect[1][0]/2)):int(object_center[1]+(scaled_rect[1][0]/2))]
 
-                #Format image with 1:1. The Image size is variable
-                if object_img.shape[0] > 100 and object_img.shape[1] > 100:
-                    max_size = max(object_img.shape[0], object_img.shape[1])
-                    self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
-                    self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
-                    self.object_img = cv2.resize(self.object_img,(640,640), interpolation=cv2.INTER_LINEAR_EXACT)
+                    #Format image with 1:1. The Image size is variable
+                    if object_img.shape[0] > 100 and object_img.shape[1] > 100:
+                        max_size = max(object_img.shape[0], object_img.shape[1])
+                        self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
+                        self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
+                        self.object_img = cv2.resize(self.object_img,(640,640), interpolation=cv2.INTER_LINEAR_EXACT)
 
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -282,6 +281,8 @@ class FrameProccessing():
                 box = np.int0(cv2.boxPoints(rect))
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
+        
+        return 0
 
 
     def read_frame(self):
@@ -292,14 +293,14 @@ class FrameProccessing():
         self.__streamwrite()
 
 
-    def update(self):
+    def update(self, skip_preprocess: bool):
         """
         update
         write outgoing frame, get incoming frame and run preprocessing
         """
         self.__streamwrite()
         self.__streamcap()
-        self.__do_preprocess()
+        return self.__do_preprocess(skip_preprocess)
 
     def __del__(self):
         self.__cap_gst.release()

@@ -14,7 +14,6 @@ from queue import Empty
 import traceback 
 import os
 import shutil
-from THTClassificator.SettingsFile import xmlSettings
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -128,42 +127,62 @@ def main():
     prep_queue_out = multiprocessing.Queue()
     prepProcess = multiprocessing.Process(target=mp.process_preprocess, args=(prep_queue_in, prep_queue_out, shared_img.name, sh_buff_lock, logging.getLogger().getEffectiveLevel()))
     prepProcess.start()
+    prep_queue_in.put(mp.doFrame())
 
     try:
         while True:
-            prep_signal = prep_queue_out.get()
-        
+            try:
+                prep_signal = prep_queue_out.get(False)
+            except Empty:
+                prep_signal = None
+
             try:
                 class_signal = class_queue_out.get(False)
             except Empty:
                 class_signal = None
-                
-            if isinstance(prep_signal, mp.PUT):
-                class_queue_in.put(1)
 
+            #Handle Stop Flags   
+            if isinstance(class_signal, mp.STOPFLAG):
+                prep_queue_in.put(mp.STOPFLAG)
+                break
+            
+            if isinstance(prep_signal, mp.STOPFLAG):
+                class_queue_in.put(mp.STOPFLAG)
+                break
+
+            #return Classifier Results
+            if isinstance(class_signal, mp.doAI) and isinstance(class_signal.state, mp.done):
+                prep_queue_in.put(mp.doFrame())
+                logging.debug("MAIN says doFrame to PrepProcess")
+
+            
+            #Save Image in dataset
             if key_pressed.f5:
                 class_queue_in.put(mp.SAVEVOC())
+                logging.debug("MAIN says SAVEVOC to ClassProcess")
+
                 key_pressed.f5 = False
             
-            if isinstance(class_signal, mp.STOPFLAG):
-                break
-            
-            if isinstance(class_signal, mp.PUT):
-                prep_queue_in.put(mp.PUT())
+            if isinstance(class_signal, mp.SAVEVOC) and isinstance(class_signal.state, mp.done):
+                logging.info("Image saved for VOC Dataset")
 
-            if isinstance(prep_signal, mp.STOPFLAG):
-                break
+            #start Classifier Process
+            if isinstance(prep_signal, mp.doFrame) and isinstance(prep_signal.state, mp.done):
+                class_queue_in.put(mp.doAI())
+                logging.debug("MAIN says DoAI to ClassProcess")
 
     except:
         logging.info("Exception uccored")
         traceback.print_exc()
+        class_queue_in.put(mp.STOPFLAG)
+        prep_queue_in.put(mp.STOPFLAG)
 
 
-    logging.info("closing")
-    classProcess.terminate()
-    prepProcess.terminate()
-    shared_img.unlink()
+    logging.info("closing THT-Classificator")
     kill_thread(thread)
+    classProcess.join()
+    prepProcess.join()
+    shared_img.unlink()
     sys.exit(1)
 
 if __name__ == '__main__':
