@@ -46,11 +46,11 @@ class Keyboard:
 
 
 def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, board: FSBoard.Boards, log_level: int):    
+    settings  = TFLITESettings()
+    
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
-    img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
-    
-    settings  = TFLITESettings()
+    img_buf = np.ndarray(settings.get_shared_buf_array_dim(), dtype="uint8", buffer=shm.buf)
 
     if board == FSBoard.Boards.MED3_REV100:
         model_file = settings.get_model_path()
@@ -81,6 +81,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 
             currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, settings.get_delegate())
 
+
     try:
         while True:
             #To Communicate with other Processes, we use Queues.
@@ -92,16 +93,15 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
             
             #RUN AI-Inference
             if isinstance(signal, doAI):
-                img = np.zeros((640,640,3), dtype=np.uint8)
+                img = np.zeros(settings.get_shared_buf_array_dim()[1:], dtype=np.uint8)
                 with lock:
                     img[:,:,:] = img_buf[0][:,:,:]
                 
-                img = cv2.resize(img, (300,300), cv2.INTER_LINEAR_EXACT)
                 currentBoard.set_img(img)
                 currentBoard.get_results()
                 
                 with lock:
-                    img_buf[1][:300,:300,:] = currentBoard.get_result_image()
+                    img_buf[1][:,:,:] = currentBoard.get_result_image()
                 
                 queue_out.put(doAI(done()))
 
@@ -123,12 +123,11 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
 
 
 def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, lock: mp.Lock, log_level: int):
+    settings = TFLITESettings()
     #Init shared buffer
     shm = shared_memory.SharedMemory(name=shm_name)
-    img_buf = np.ndarray((2,640,640,3), dtype="uint8", buffer=shm.buf)
-    tmp_image = np.zeros((640,640,3),np.uint8)
-    frame_index = 0
-    od_every_n_frame = 5
+    img_buf = np.ndarray(settings.get_shared_buf_array_dim(), dtype="uint8", buffer=shm.buf)
+    tmp_image = np.zeros(settings.get_model_input_size()[1:], dtype=np.uint8)
 
     #Start GStreamer
     try:
@@ -150,11 +149,11 @@ def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, l
                 skip_preprocess = True
 
             if img_processing.update(skip_preprocess):
-                print("Trunc")
                 queue_in.put(doFrame())
 
             #Send Board Img to Classification Process
             if hasattr(img_processing, "object_img"):
+                img_processing.object_img = cv2.resize(img_processing.object_img, settings.get_model_input_size()[1:3], cv2.INTER_LINEAR_EXACT)
                 with lock:
                     img_buf[0][:,:,:] = img_processing.object_img[:,:,:]
                 queue_out.put(doFrame(done()))

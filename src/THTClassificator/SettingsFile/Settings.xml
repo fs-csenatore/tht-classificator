@@ -38,6 +38,9 @@
 	<tflite>
 		<inference>
 			<model-file>tflite-file.tflite</model-file>
+			<input_size_x>300</input_size_x>
+			<input_size_y>300</input_size_y>
+			<input_size_depth>3</input_size_depth>
 			<label-map>tflite_label_map.txt</label-map>
 			<!--
 				delegate:

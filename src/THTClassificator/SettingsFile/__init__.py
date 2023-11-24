@@ -126,6 +126,7 @@ class FrameSettings(xmlSettings):
             return True
         else:
             return False
+    
 
 
 
@@ -149,3 +150,17 @@ class TFLITESettings(xmlSettings):
     
     def get_dataset_path(self):
         return os.path.join(os.path.expanduser("~"), self.findtext('tflite/dataset-path'))
+
+    def get_model_input_size(self):
+        x = int(self.findtext('tflite/inference/input_size_x'))
+        y = int(self.findtext("tflite/inference/input_size_y"))
+        depth = int(self.findtext("tflite/inference/input_size_depth"))
+        return (1,x,y,depth)
+    
+    def get_shared_buf_size(self):
+        size = self.get_model_input_size()
+        return (2*size[1]*size[2]*size[3])
+
+    def get_shared_buf_array_dim(self):
+        size = self.get_model_input_size()
+        return (2, size[1], size[2], size[3])    

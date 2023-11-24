@@ -14,6 +14,8 @@ from queue import Empty
 import traceback 
 import os
 import shutil
+from THTClassificator.SettingsFile import TFLITESettings
+
 
 key_pressed = mp.Keyboard(False, False, False)
 
@@ -113,8 +115,9 @@ def main():
     thread = threading.Thread(target=listen_keyboard_wrapper)
     thread.start()
 
+    settings = TFLITESettings()
     sh_buff_lock = multiprocessing.Lock()
-    shared_img = shared_memory.SharedMemory(create=True, size=(2*640*640*3))
+    shared_img = shared_memory.SharedMemory(create=True, size=settings.get_shared_buf_size())
 
     #Prepair multiprocessing for classification
     class_queue_in = multiprocessing.Queue()

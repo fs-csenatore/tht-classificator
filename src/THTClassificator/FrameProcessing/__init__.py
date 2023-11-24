@@ -271,7 +271,6 @@ class FrameProccessing():
                         max_size = max(object_img.shape[0], object_img.shape[1])
                         self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
                         self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
-                        self.object_img = cv2.resize(self.object_img,(640,640), interpolation=cv2.INTER_LINEAR_EXACT)
 
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
