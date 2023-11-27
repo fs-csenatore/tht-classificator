@@ -21,9 +21,7 @@ class Signals():
     def __init__(self, state: Union[run , done]):
         self.state = state
 
-class STOPFLAG(Signals):
-    def __init__(self, state: Union[run , done] = run()):
-        super().__init__(state)
+class STOPFLAG():pass
         
 class SAVEVOC(Signals):
     def __init__(self, state: Union[run , done] = run()):
@@ -149,7 +147,9 @@ def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, l
                 skip_preprocess = True
 
             if img_processing.update(skip_preprocess):
-                queue_in.put(doFrame())
+                if skip_preprocess == False:
+                    logging.debug("try doFrame again")
+                    queue_in.put(doFrame())
 
             #Send Board Img to Classification Process
             if hasattr(img_processing, "object_img"):
@@ -189,8 +189,11 @@ def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, l
 
                 #Show rotated object:
                 with lock:
-                    shape1 = img_buf.shape[1:]
-                    img_processing.wrt_frame[0:shape1[0], img_processing.wrt_frame.shape[1]-shape1[1]:, :] = img_buf[0][:,:,:]
+                    shape2 = max(shape1[0], shape1[1])
+                    img_prev=cv2.resize(img_buf[0],(shape2,shape2))
+                
+                shape2 = img_prev.shape
+                img_processing.wrt_frame[shape1[0]:shape1[0]+shape2[0], 0:shape2[1], :] = img_prev[:,:,:]
                  
 
 
@@ -200,9 +203,9 @@ def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, l
             if isinstance(signal, doFrame):
                 with lock:
                     tmp_image = img_buf[1][:,:,:]
-                    tmp_image = cv2.resize(tmp_image, (700, 700))
+                    tmp_image = cv2.resize(tmp_image, (800, 800))
             
-            img_processing.wrt_frame[img_processing.wrt_frame.shape[0]-700:, img_processing.wrt_frame.shape[1]-700:, :] = tmp_image[:,:,:]
+            img_processing.wrt_frame[img_processing.wrt_frame.shape[0]-800:, img_processing.wrt_frame.shape[1]-800:, :] = tmp_image[:,:,:]
     
     except:
         traceback.print_exc()
