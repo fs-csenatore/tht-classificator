@@ -146,11 +146,11 @@ def main():
 
             #Handle Stop Flags   
             if isinstance(class_signal, mp.STOPFLAG):
-                prep_queue_in.put(mp.STOPFLAG)
+                prep_queue_in.put(mp.STOPFLAG())
                 break
             
             if isinstance(prep_signal, mp.STOPFLAG):
-                class_queue_in.put(mp.STOPFLAG)
+                class_queue_in.put(mp.STOPFLAG())
                 break
 
             #return Classifier Results
@@ -182,9 +182,9 @@ def main():
 
 
     logging.info("closing THT-Classificator")
-    kill_thread(thread)
     classProcess.join()
     prepProcess.join()
+    kill_thread(thread)
     shared_img.unlink()
     sys.exit(1)
 

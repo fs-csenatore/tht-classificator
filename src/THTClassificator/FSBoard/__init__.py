@@ -220,7 +220,7 @@ class boards:
         # Put label next to bndbox
         y = bndbox.ymin - 5 if bndbox.ymin - 5 > 5 else bndbox.ymin + 5
 
-        label = "{}: {:0d}%".format(label, label_score)
+        label = "{}: {:0d}%".format(label, int(label_score))
         cv2.putText(self.result_image, label, (bndbox.xmin, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     def __draw_object(self, bndbox: boundingbox, label: str, score: int, color: tuple):

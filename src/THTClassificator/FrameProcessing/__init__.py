@@ -63,11 +63,11 @@ class FrameProccessing():
             frameId = int(round(self.__cap_gst.get(cv2.CAP_PROP_POS_FRAMES)))
 
             if frameId % frames2skip == 0:
-                logging.debug("read frameId=%d",frameId)
+                #logging.debug("read frameId=%d",frameId)
                 ret, self.cap_frame  = self.__cap_gst.read()
                 return ret
             else:
-                logging.debug("drop frameId=%d",frameId)
+                #logging.debug("drop frameId=%d",frameId)
                 self.__cap_gst.grab()
 
 
@@ -213,6 +213,7 @@ class FrameProccessing():
 
     def __do_preprocess(self, skip_preprocess: bool):
         #Get a Frame to work with
+        ret = 0
         self.working_frame = self.__create_working_frame()
         mask = self.__get_threshhold_mask(self.working_frame,
                                       self.Settings.get_hsv_boundings()[0],
@@ -271,7 +272,13 @@ class FrameProccessing():
                         max_size = max(object_img.shape[0], object_img.shape[1])
                         self.object_img = np.zeros((max_size, max_size, 3),np.uint8)
                         self.object_img[0:object_img.shape[0],0:object_img.shape[1],:] = object_img
-
+                    else:
+                        ret = 1
+                else:
+                    ret = 1
+        else:
+            if skip_preprocess == False:
+                    ret = 1
         #when debug is enabled
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             self.calibrate_frame = self.__get_masked_image(self.working_frame, mask)
@@ -281,7 +288,7 @@ class FrameProccessing():
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
         
-        return 0
+        return ret
 
 
     def read_frame(self):
