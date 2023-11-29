@@ -184,18 +184,14 @@ def process_preprocess(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: str, l
                     try:
                         shape1 = img_processing.calibrate_frame.shape
                         img_processing.wrt_frame[0:shape1[0], 0:shape1[1], :] = img_processing.calibrate_frame
+                    #Show rotated object:
+                        with lock:
+                            shape2 = max(shape1[0], shape1[1])
+                            img_prev=cv2.resize(img_buf[0],(shape2,shape2))
+                            shape2 = img_prev.shape
+                            img_processing.wrt_frame[shape1[0]:shape1[0]+shape2[0], 0:shape2[1], :] = img_prev[:,:,:]
                     except:
                         logging.error("Could not display calibrate_frame")
-
-                #Show rotated object:
-                with lock:
-                    shape2 = max(shape1[0], shape1[1])
-                    img_prev=cv2.resize(img_buf[0],(shape2,shape2))
-                
-                shape2 = img_prev.shape
-                img_processing.wrt_frame[shape1[0]:shape1[0]+shape2[0], 0:shape2[1], :] = img_prev[:,:,:]
-                 
-
 
                 img_processing.Settings.load()
 
