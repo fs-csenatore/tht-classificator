@@ -287,6 +287,7 @@ class FrameProccessing():
                 box = np.int0(cv2.boxPoints(rect))
                 cv2.drawContours(self.calibrate_frame, [box], 0, (255,255,0),3)
                 x, y, w, h = cv2.boundingRect(box)
+                cv2.rectangle(self.calibrate_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
         
         return ret
 
