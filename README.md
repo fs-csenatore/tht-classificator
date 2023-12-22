@@ -1,1 +1,1 @@
-# opencv-imx93
+# THT-Classificator
