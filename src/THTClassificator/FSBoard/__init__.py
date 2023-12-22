@@ -8,7 +8,7 @@ import tflite_runtime.interpreter as tflite
 import time
 import logging
 from datetime import datetime
-
+from THTClassificator.SettingsFile import TFLITESettings
 
 class Boards(enum.Enum):
     MED3_REV100 = 1
@@ -69,23 +69,20 @@ class pascal_voc(xmlET.ElementTree):
         self.write(filename,encoding="unicode", xml_declaration=True, method="xml")
 
 class object_detection:
-    def __init__(self, model_file: str, delegate: int = 0):
+    def __init__(self):
         """
         create a interpreter for object detection.
-
-        model_file = path to a tflite model file
-
-        delegate is a value to represent a delegate
-        delegate=0 => No delegate, run on CPU
-        delegate=1 => use delegate, run on ethos-u
         """
-        print(model_file)
-        if delegate == 1:
+        settings = TFLITESettings()
+        if settings.get_delegate() == 1:
             ext_delegate = [tflite.load_delegate('/usr/lib/libethosu_delegate.so')]
         else:
             ext_delegate = None
 
-        self.__interpreter = tflite.Interpreter(model_file,experimental_delegates=ext_delegate)
+        self.__interpreter = tflite.Interpreter(
+            settings.get_model_path(),
+            experimental_delegates=ext_delegate
+        )
         self.__interpreter.allocate_tensors()
 
         self.input_details = self.__interpreter.get_input_details()
@@ -99,8 +96,23 @@ class object_detection:
             # This is a TF1 model
             self.__boxes_idx, self.__classes_idx, self.__scores_idx, self.__count_idx = 0, 1, 2, 3
 
+        #define image preprocess function
+        if settings.get_input_type() == "float32-VGG":
+            self.__preprocess_input_tensor=self.__vgg_input_tensor
+        elif settings.get_input_type() == "float32-1":
+            self.__preprocess_input_tensor=self.__normalize_input_tensor
+        else:
+            self.__preprocess_input_tensor=self.__normalize_input_tensor
+
     def __normalize_input_tensor(self, tensor: np.ndarray):
         return (np.float32(tensor) - 127.5) / 127.5
+    
+    def __vgg_input_tensor(self , tensor: np.ndarray ):
+        if tensor.shape[3] == 3:
+            channel_means = [np.float32(123.68) , np.float32(116.779), np.float32(103.939)]
+            return tensor.astype(np.float32) - [[channel_means]]
+        else:
+            return tensor.astype(np.float32)
 
     def detect_objects(self, image: np.ndarray, threshold=0.0):
         """Returns a list of detection results, each a dictionary of object info."""
@@ -110,7 +122,7 @@ class object_detection:
 
         #Normalize Input when type is float32, else assume uint8.
         if self.input_details[0]['dtype'] == np.float32:
-            input_tensor = self.__normalize_input_tensor(input_tensor)
+            input_tensor = self.__preprocess_input_tensor(input_tensor)
 
         start_time = time.time()
 
@@ -250,12 +262,12 @@ class boards:
 
 class MED3_rev100(object_detection, boards):
 
-    def __init__(self, model_file, label_map_file: str ,delegate: int = 0):
-        super().__init__(model_file, delegate)
+    def __init__(self):
+        super().__init__()
         self.board_name = "MED3-rev1.00"
-        
         #Get defined labels from tflite label map
-        self.get_labels(label_map_file)
+        settings = TFLITESettings()
+        self.get_labels(settings.get_label_path())
 
         #Group labels according to reference identifier
         self.__J6_label_ids = list()

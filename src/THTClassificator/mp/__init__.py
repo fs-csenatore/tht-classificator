@@ -77,7 +77,7 @@ def process_classification(queue_in: mp.Queue, queue_out: mp.Queue, shm_name: st
     match board:
         case FSBoard.Boards.MED3_REV100:
 
-            currentBoard = FSBoard.MED3_rev100(model_file, label_map_file, settings.get_delegate())
+            currentBoard = FSBoard.MED3_rev100()
 
 
     try:

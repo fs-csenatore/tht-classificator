@@ -41,6 +41,13 @@
 			<input_size_x>300</input_size_x>
 			<input_size_y>300</input_size_y>
 			<input_size_depth>3</input_size_depth>
+			<!-- 
+				define input-Preprocessing
+				 float32-1: 	normalize input between -1 and 1
+				 float32-VGG:  	VGG style channel mean subtraction as described here:
+    							https://gist.github.com/ksimonyan/211839e770f7b538e2d8#file-readme-mdnge.
+			-->
+			<input_type>float32-VGG</input_type>
 			<label-map>tflite_label_map.txt</label-map>
 			<!--
 				delegate:

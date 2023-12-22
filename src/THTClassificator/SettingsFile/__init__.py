@@ -164,3 +164,6 @@ class TFLITESettings(xmlSettings):
     def get_shared_buf_array_dim(self):
         size = self.get_model_input_size()
         return (2, size[1], size[2], size[3])    
+
+    def get_input_type(self):
+        return self.findtext("tflite/inference/input_type")
